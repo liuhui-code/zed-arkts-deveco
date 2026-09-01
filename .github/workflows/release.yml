@@ -37,7 +37,7 @@ jobs:
       - name: Smoke-test Windows installer
         shell: pwsh
         run: |
-          $installer = Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-windows-x64.exe"
+          $installer = Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-x64.exe"
           $install = Start-Process $installer.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
           $manifest = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.toml"
@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           $assets = @(
-            Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-windows-x64.exe"
+            Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-x64.exe"
             Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}.tar.gz"
           )
           $lines = foreach ($asset in $assets) {

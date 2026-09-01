@@ -31,7 +31,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 ### 2. 安装本扩展
 
 1. 关闭 Zed。
-2. 从本仓库的 [Releases](https://github.com/liuhui-code/zed-arkts-deveco/releases) 下载 `zed-arkts-deveco-<版本>-windows-x64.exe`。
+2. 从本仓库的 [Releases](https://github.com/liuhui-code/zed-arkts-deveco/releases) 下载 `zed-arkts-deveco-<版本>-x64.exe`。
 3. 运行安装器，然后重新启动 Zed。
 4. 打开 DevEco 工程根目录，再打开任意 `.ets` 文件。
 5. 首次使用时，Zed 会自动下载固定版本的 ArkTS language server。

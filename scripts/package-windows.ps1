@@ -43,7 +43,7 @@ if (-not (Test-Path $Makensis)) {
   throw "NSIS makensis.exe was not found"
 }
 
-$Installer = Join-Path $Dist "zed-arkts-deveco-$Version-windows-x64.exe"
+$Installer = Join-Path $Dist "zed-arkts-deveco-$Version-x64.exe"
 Push-Location (Join-Path $Root "installer\windows")
 try {
   & $Makensis "/DVERSION=$Version" "/DSTAGE_DIR=$Stage" "/DOUTFILE=$Installer" "installer.nsi"
