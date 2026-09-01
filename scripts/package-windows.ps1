@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.3.2"
+  [string]$Version = "0.3.3"
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +27,8 @@ cargo build --manifest-path (Join-Path $Root "Cargo.toml") --release --target wa
 Copy-Item (Join-Path $Root "extension.toml") $Stage
 Add-Content (Join-Path $Stage "extension.toml") "`n[lib]`nkind = `"Rust`"`nversion = `"0.7.0`""
 Copy-Item (Join-Path $Root "languages") $Stage -Recurse
+Copy-Item (Join-Path $Root "LICENSE") $Stage
+Copy-Item (Join-Path $Root "THIRD_PARTY_NOTICES.md") $Stage
 Copy-Item (Join-Path $Root "target\wasm32-wasip2\release\zed_arkts_deveco.wasm") (Join-Path $Stage "extension.wasm")
 
 Invoke-WebRequest "https://api.zed.dev/extensions/arkts/0.3.0/download" -OutFile $GrammarArchive

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-version="${1:-0.3.2}"
+version="${1:-0.3.3}"
 dist_dir="$repo_root/dist"
 stage_dir="$dist_dir/arkts-deveco"
 archive="$dist_dir/arkts-grammar.tar.gz"
@@ -17,6 +17,8 @@ cargo build --manifest-path "$repo_root/Cargo.toml" --release --target wasm32-wa
 cp "$repo_root/extension.toml" "$stage_dir/extension.toml"
 printf '\n[lib]\nkind = "Rust"\nversion = "0.7.0"\n' >> "$stage_dir/extension.toml"
 cp -R "$repo_root/languages" "$stage_dir/languages"
+cp "$repo_root/LICENSE" "$stage_dir/LICENSE"
+cp "$repo_root/THIRD_PARTY_NOTICES.md" "$stage_dir/THIRD_PARTY_NOTICES.md"
 cp "$repo_root/target/wasm32-wasip2/release/zed_arkts_deveco.wasm" "$stage_dir/extension.wasm"
 
 curl --fail --location --output "$archive" https://api.zed.dev/extensions/arkts/0.3.0/download
