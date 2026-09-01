@@ -11,7 +11,7 @@ const serverPath = process.env.ARKTS_LSP_SERVER_PATH
   ? resolve(process.env.ARKTS_LSP_SERVER_PATH)
   : fileURLToPath(new URL('./node_modules/@arkts/language-server/out/index.mjs', import.meta.url))
 const defaultHeapLimitMb = 4096
-const diagnosticBuild = 'zed-arkts-deveco-0.3.3'
+const diagnosticBuild = 'zed-arkts-deveco-0.3.4'
 const diagnosticsEnabled = process.env.ARKTS_LSP_DIAGNOSTICS !== '0'
 const memoryIntervalMs = Math.max(100, Number(process.env.ARKTS_LSP_MEMORY_INTERVAL_MS) || 5_000)
 const sessionId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`

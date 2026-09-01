@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-version="${1:-0.3.3}"
+version="${1:-0.3.4}"
 dist_dir="$repo_root/dist"
 stage_dir="$dist_dir/arkts-deveco"
 archive="$dist_dir/arkts-grammar.tar.gz"
