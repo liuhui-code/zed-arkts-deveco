@@ -33,15 +33,8 @@ jobs:
         run: |
           $archive = Join-Path $env:RUNNER_TEMP "nsis-3.12.zip"
           $toolsDirectory = Join-Path $env:RUNNER_TEMP "nsis-tools"
-          foreach ($attempt in 1..3) {
-            try {
-              Invoke-WebRequest "https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download" -OutFile $archive
-              break
-            } catch {
-              if ($attempt -eq 3) { throw }
-              Start-Sleep -Seconds 10
-            }
-          }
+          curl.exe --fail --location --retry 3 --retry-all-errors --output $archive "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12.zip"
+          if ($LASTEXITCODE -ne 0) { throw "NSIS download failed with exit code $LASTEXITCODE" }
           $expectedHash = "56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f"
           $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actualHash -ne $expectedHash) {
