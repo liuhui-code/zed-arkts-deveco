@@ -96,11 +96,22 @@ jobs:
               throw "Global task was not preserved or registered: $label"
             }
           }
+          $stateDirectory = Join-Path $env:LOCALAPPDATA "ArkTSDevEco"
+          $backupTasks = Join-Path $stateDirectory "tasks.before-arkts-deveco.json"
+          $installedHashFile = Join-Path $stateDirectory "tasks.arkts-deveco.sha256"
+          if (-not (Test-Path $backupTasks)) { throw "Installer did not back up the existing Zed tasks file" }
+          $backedUpTasks = [IO.File]::ReadAllText($backupTasks)
+          if ($backedUpTasks -cne $originalTasks) { throw "Installer backup differs from the original Zed tasks file" }
+          $recordedHash = ([IO.File]::ReadAllText($installedHashFile)).Trim()
+          $registeredHash = (Get-FileHash $globalTasks -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($recordedHash -cne $registeredHash) { throw "Registered tasks hash does not match installer state" }
           $uninstaller = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\Uninstall.exe"
           $uninstall = Start-Process $uninstaller -ArgumentList "/S" -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with $($uninstall.ExitCode)" }
           $restoredTasks = [IO.File]::ReadAllText($globalTasks)
-          if ($restoredTasks -cne $originalTasks) { throw "Uninstaller did not restore the original Zed tasks file" }
+          if ($restoredTasks -cne $originalTasks) {
+            throw "Uninstaller did not restore the original Zed tasks file (expected length $($originalTasks.Length), actual length $($restoredTasks.Length))"
+          }
       - name: Create SHA-256 checksums
         shell: pwsh
         run: |
