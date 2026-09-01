@@ -31,6 +31,8 @@ Section "Install"
   SetOutPath "$INSTDIR"
   File "..\..\LICENSE"
   File "environment-check.ps1"
+  File "task-registration.ps1"
+  File /oname=arkts-tasks.json "..\..\languages\arkts\tasks.json"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "DisplayName" "ArkTS DevEco for Zed"
@@ -39,6 +41,12 @@ Section "Install"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoRepair" 1
+
+  ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\task-registration.ps1" -Mode Install -StateDir "$INSTDIR" -SourceTasks "$INSTDIR\arkts-tasks.json"' $4
+  StrCmp $4 0 tasks_registered
+    IfSilent tasks_registered 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "无法把 ArkTS 构建任务注册到 Zed 全局任务文件；为保护已有配置，安装器没有覆盖该文件。打开 .ets 文件后仍可使用扩展自带的语言任务。"
+  tasks_registered:
 
   IfSilent install_done 0
     ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\environment-check.ps1" -Mode Check -StatusFile "$INSTDIR\environment-status.ini"' $0
@@ -70,10 +78,18 @@ SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
+  IfFileExists "$INSTDIR\task-registration.ps1" 0 tasks_unregistered
+    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\task-registration.ps1" -Mode Uninstall -StateDir "$INSTDIR"' $4
+  tasks_unregistered:
   RMDir /r "$LOCALAPPDATA\Zed\extensions\installed\arkts-deveco"
   RMDir /r "$LOCALAPPDATA\Zed\extensions\work\arkts-deveco"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\environment-check.ps1"
+  Delete "$INSTDIR\task-registration.ps1"
+  Delete "$INSTDIR\arkts-tasks.json"
+  Delete "$INSTDIR\tasks.before-arkts-deveco.json"
+  Delete "$INSTDIR\tasks.created-by-arkts-deveco"
+  Delete "$INSTDIR\tasks.arkts-deveco.sha256"
   Delete "$INSTDIR\environment-status.ini"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"

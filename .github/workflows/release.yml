@@ -6,7 +6,7 @@ on:
       version:
         description: Release version without the v prefix
         required: true
-        default: 0.3.1
+        default: 0.3.2
   push:
     tags:
       - "v*"
@@ -59,17 +59,48 @@ jobs:
         shell: pwsh
         run: |
           $installer = Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-x64.exe"
+          $globalTasks = Join-Path $env:APPDATA "Zed\tasks.json"
+          New-Item (Split-Path -Parent $globalTasks) -ItemType Directory -Force | Out-Null
+          $originalTasks = @'
+          // Existing user task must survive installation and uninstallation.
+          [
+            {
+              "label": "Existing Task",
+              "command": "echo existing"
+            },
+          ]
+          '@
+          [IO.File]::WriteAllText($globalTasks, $originalTasks, [Text.UTF8Encoding]::new($false))
           $install = Start-Process $installer.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
           $manifest = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.toml"
           $wasm = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.wasm"
           $grammar = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\grammars\arkts.wasm"
-          foreach ($path in @($manifest, $wasm, $grammar)) {
+          $taskInstaller = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\task-registration.ps1"
+          foreach ($path in @($manifest, $wasm, $grammar, $taskInstaller, $globalTasks)) {
             if (-not (Test-Path $path)) { throw "Missing installed file: $path" }
+          }
+          $registeredTasks = [IO.File]::ReadAllText($globalTasks)
+          foreach ($label in @(
+            "Existing Task",
+            "ArkTS: Build Debug",
+            "ArkTS: Build Release",
+            "ArkTS: Build and Run",
+            "ArkTS: Clean",
+            "ArkTS: Check Lint",
+            "ArkTS: List Devices",
+            "ArkTS: Device Logs"
+          )) {
+            $pattern = '"label"\s*:\s*"' + [regex]::Escape($label) + '"'
+            if ($registeredTasks -notmatch $pattern) {
+              throw "Global task was not preserved or registered: $label"
+            }
           }
           $uninstaller = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\Uninstall.exe"
           $uninstall = Start-Process $uninstaller -ArgumentList "/S" -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with $($uninstall.ExitCode)" }
+          $restoredTasks = [IO.File]::ReadAllText($globalTasks)
+          if ($restoredTasks -cne $originalTasks) { throw "Uninstaller did not restore the original Zed tasks file" }
       - name: Create SHA-256 checksums
         shell: pwsh
         run: |
