@@ -38,7 +38,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 3. 运行安装器，然后重新启动 Zed。
 4. 打开 DevEco 工程根目录，再打开任意 `.ets` 文件。
 5. 首次使用时，Zed 会自动下载固定版本的 ArkTS language server。
-6. 按下面的说明安装 DevEco CLI，即可使用扩展自带的构建和运行任务。
+6. 安装器会检测 Zed、Node.js、npm、DevEco CLI 和 DevEco 工具链；环境满足要求时不显示更新提示，缺项时才询问是否修复。
 
 安装器按当前用户安装，无需管理员权限，也不会覆盖 `settings.json`。扩展安装到：
 
@@ -48,6 +48,8 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 
 可以在 Windows 的“设置 → 应用 → 已安装的应用”中卸载 `ArkTS DevEco for Zed`。
 
+环境修复由用户明确确认后才执行：安装器优先通过 `winget` 安装缺失的 Zed/Node.js LTS，通过 `npm` 安装缺失的 DevEco CLI；系统没有 `winget` 时改为打开相应下载页。DevEco Studio 或 Command Line Tools 缺失时只打开官方下载页。用户可以拒绝，扩展仍会正常安装，编辑、补全和跳转不受影响。静默安装模式不会弹窗，也不会修改开发环境。
+
 首个版本未进行 Authenticode 代码签名，因此 SmartScreen 可能显示“未知发布者”。安装器由公开的 GitHub Actions 工作流构建；Release 同时提供 `SHA256SUMS.txt`。
 
 ## 启用构建与运行
@@ -56,7 +58,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 
 ```sh
 node --version
-npm install -g @deveco/deveco-cli@stable
+npm install -g @deveco/deveco-cli@latest
 devecocli --version
 ```
 
@@ -201,13 +203,13 @@ cargo build --release --target wasm32-wasip2
 在 macOS / Linux 生成可移植扩展包：
 
 ```sh
-./scripts/package-extension.sh 0.2.0
+./scripts/package-extension.sh 0.3.0
 ```
 
 在 Windows 安装 Rust 与 [NSIS](https://nsis.sourceforge.io/) 后生成 EXE：
 
 ```powershell
-./scripts/package-windows.ps1 -Version 0.2.0
+./scripts/package-windows.ps1 -Version 0.3.0
 ```
 
 推送 `v*` 标签会触发公开的 GitHub Actions Release 工作流，构建、静默安装/卸载冒烟测试并发布 EXE、扩展压缩包和 SHA-256 校验文件。

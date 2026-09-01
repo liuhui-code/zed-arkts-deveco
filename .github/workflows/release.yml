@@ -6,7 +6,7 @@ on:
       version:
         description: Release version without the v prefix
         required: true
-        default: 0.2.0
+        default: 0.3.0
   push:
     tags:
       - "v*"
@@ -31,6 +31,17 @@ jobs:
       - name: Install NSIS
         shell: pwsh
         run: choco install nsis --no-progress -y
+      - name: Validate Windows environment detector
+        shell: pwsh
+        run: |
+          $json = & ./installer/windows/environment-check.ps1 -Mode Check -Json
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -notin @(0, 2)) { throw "Unexpected detector exit code: $exitCode" }
+          $status = $json | ConvertFrom-Json
+          if ($null -eq $status.Ready -or -not $status.Summary) { throw "Detector returned an incomplete status" }
+          foreach ($name in @("Zed", "Node", "Npm", "DevEcoCli", "DevEcoToolchain")) {
+            if ($null -eq $status.Components.$name.Ready) { throw "Missing component status: $name" }
+          }
       - name: Build extension and Windows installer
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Version "${{ steps.version.outputs.value }}"
