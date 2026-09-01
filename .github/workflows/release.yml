@@ -52,7 +52,10 @@ jobs:
       - name: Create SHA-256 checksums
         shell: pwsh
         run: |
-          $assets = Get-ChildItem dist -File | Where-Object { $_.Extension -eq ".exe" -or $_.Name.EndsWith(".tar.gz") }
+          $assets = @(
+            Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-windows-x64.exe"
+            Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}.tar.gz"
+          )
           $lines = foreach ($asset in $assets) {
             $hash = (Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($asset.Name)"
