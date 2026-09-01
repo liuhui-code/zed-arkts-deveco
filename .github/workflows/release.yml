@@ -6,7 +6,7 @@ on:
       version:
         description: Release version without the v prefix
         required: true
-        default: 0.3.2
+        default: 0.3.3
   push:
     tags:
       - "v*"
@@ -89,6 +89,7 @@ jobs:
       - name: Smoke-test Windows installer
         shell: pwsh
         run: |
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
           $installer = Get-Item "dist/zed-arkts-deveco-${{ steps.version.outputs.value }}-x64.exe"
           $globalTasks = Join-Path $env:APPDATA "Zed\tasks.json"
           New-Item (Split-Path -Parent $globalTasks) -ItemType Directory -Force | Out-Null
@@ -108,8 +109,22 @@ jobs:
           $wasm = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.wasm"
           $grammar = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\grammars\arkts.wasm"
           $taskInstaller = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\task-registration.ps1"
-          foreach ($path in @($manifest, $wasm, $grammar, $taskInstaller, $globalTasks)) {
+          $diagnosticsCollector = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\collect-diagnostics.ps1"
+          $thirdPartyNotices = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\THIRD_PARTY_NOTICES.md"
+          foreach ($path in @($manifest, $wasm, $grammar, $taskInstaller, $diagnosticsCollector, $thirdPartyNotices, $globalTasks)) {
             if (-not (Test-Path $path)) { throw "Missing installed file: $path" }
+          }
+          $diagnosticLogs = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\logs"
+          New-Item $diagnosticLogs -ItemType Directory -Force | Out-Null
+          '{"event":"ci-smoke"}' | Set-Content (Join-Path $diagnosticLogs "proxy-ci.jsonl") -Encoding utf8
+          $diagnosticsOutput = Join-Path $env:RUNNER_TEMP "diagnostics-output"
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $diagnosticsCollector -OutputDirectory $diagnosticsOutput
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostics collector failed with exit code $LASTEXITCODE" }
+          $diagnosticsArchive = Get-Item (Join-Path $diagnosticsOutput "ArkTSDevEco-diagnostics-*.zip")
+          $diagnosticsExpanded = Join-Path $env:RUNNER_TEMP "diagnostics-expanded"
+          Expand-Archive $diagnosticsArchive.FullName $diagnosticsExpanded
+          if (-not (Test-Path (Join-Path $diagnosticsExpanded "logs\proxy-ci.jsonl"))) {
+            throw "Diagnostics archive did not contain the language-server logs"
           }
           $registeredTasks = [IO.File]::ReadAllText($globalTasks)
           foreach ($label in @(

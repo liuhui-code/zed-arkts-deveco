@@ -9,6 +9,7 @@ const PACKAGE_VERSION: &str = "1.3.10";
 const SERVER_MODULE: &str = "node_modules/@arkts/language-server/out/index.mjs";
 const PROXY_FILE: &str = "ets-language-server.mjs";
 const PROXY_SOURCE: &str = include_str!("../assets/ets-language-server.mjs");
+const DIAGNOSTIC_SERVER_SOURCE: &[u8] = include_bytes!("../assets/diagnostic-language-server.mjs");
 
 struct ArkTsDevEcoExtension {
     cached_proxy_path: Option<String>,
@@ -38,6 +39,13 @@ impl ArkTsDevEcoExtension {
             return Err(format!(
                 "installed {PACKAGE_NAME}@{PACKAGE_VERSION}, but {SERVER_MODULE} is missing"
             ));
+        }
+
+        let installed_server = fs::read(SERVER_MODULE).ok();
+        if installed_server.as_deref() != Some(DIAGNOSTIC_SERVER_SOURCE) {
+            fs::write(SERVER_MODULE, DIAGNOSTIC_SERVER_SOURCE).map_err(|error| {
+                format!("failed to install diagnostic ArkTS language server: {error}")
+            })?;
         }
 
         zed::set_language_server_installation_status(

@@ -1,6 +1,6 @@
 id = "arkts-deveco"
 name = "ArkTS DevEco"
-version = "0.3.2"
+version = "0.3.3"
 schema_version = 1
 authors = [
   "liuhui-code",
