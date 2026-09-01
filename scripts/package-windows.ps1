@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.3.0"
+  [string]$Version = "0.3.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,6 +8,15 @@ $Dist = Join-Path $Root "dist"
 $Stage = Join-Path $Dist "arkts-deveco"
 $GrammarArchive = Join-Path $Dist "arkts-grammar.tar.gz"
 $ExpectedGrammarArchiveSha256 = "7fdf1154fa0a55e84d455be5fd60ca721d63c0d5f449ae1b3b106fc4b46bf1f6"
+$InstallerScript = Join-Path $Root "installer\windows\installer.nsi"
+
+$installerBytes = [IO.File]::ReadAllBytes($InstallerScript)
+if ($installerBytes.Length -lt 3 -or
+    $installerBytes[0] -ne 0xEF -or
+    $installerBytes[1] -ne 0xBB -or
+    $installerBytes[2] -ne 0xBF) {
+  throw "installer.nsi must be UTF-8 with BOM so Windows NSIS preserves Chinese text"
+}
 
 Remove-Item $Dist -Recurse -Force -ErrorAction SilentlyContinue
 New-Item $Stage -ItemType Directory -Force | Out-Null
@@ -46,7 +55,7 @@ if (-not (Test-Path $Makensis)) {
 $Installer = Join-Path $Dist "zed-arkts-deveco-$Version-x64.exe"
 Push-Location (Join-Path $Root "installer\windows")
 try {
-  & $Makensis "/DVERSION=$Version" "/DSTAGE_DIR=$Stage" "/DOUTFILE=$Installer" "installer.nsi"
+  & $Makensis "/DVERSION=$Version" "/DSTAGE_DIR=$Stage" "/DOUTFILE=$Installer" $InstallerScript
 } finally {
   Pop-Location
 }

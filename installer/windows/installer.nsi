@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 
 !ifndef VERSION
   !define VERSION "dev"
