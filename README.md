@@ -219,13 +219,13 @@ cargo build --release --target wasm32-wasip2
 在 macOS / Linux 生成可移植扩展包：
 
 ```sh
-./scripts/package-extension.sh 0.3.4
+./scripts/package-extension.sh 0.3.5
 ```
 
 在 Windows 安装 Rust 与 [NSIS](https://nsis.sourceforge.io/) 后生成 EXE：
 
 ```powershell
-./scripts/package-windows.ps1 -Version 0.3.4
+./scripts/package-windows.ps1 -Version 0.3.5
 ```
 
 推送 `v*` 标签会触发公开的 GitHub Actions Release 工作流，构建、静默安装/卸载冒烟测试并发布 EXE、扩展压缩包和 SHA-256 校验文件。

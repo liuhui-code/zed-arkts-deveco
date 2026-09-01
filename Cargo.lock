@@ -753,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "zed-arkts-deveco"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "zed_extension_api",
 ]
