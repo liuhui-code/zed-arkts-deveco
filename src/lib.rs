@@ -76,13 +76,29 @@ impl zed::Extension for ArkTsDevEcoExtension {
     fn language_server_command(
         &mut self,
         language_server_id: &LanguageServerId,
-        _worktree: &Worktree,
+        worktree: &Worktree,
     ) -> Result<zed::Command, String> {
+        if let Ok(settings) = LspSettings::for_worktree(language_server_id.as_ref(), worktree) {
+            if let Some(binary) = settings.binary {
+                if let Some(command) = binary.path {
+                    return Ok(zed::Command {
+                        command,
+                        args: binary.arguments.unwrap_or_default(),
+                        env: binary.env.unwrap_or_default().into_iter().collect(),
+                    });
+                }
+            }
+        }
+
         self.ensure_language_server(language_server_id)?;
         let proxy = self.proxy_path()?;
+        let node = match worktree.which("node") {
+            Some(node) => node,
+            None => zed::node_binary_path()?,
+        };
 
         Ok(zed::Command {
-            command: zed::node_binary_path()?,
+            command: node,
             args: vec![proxy, "--stdio".to_string()],
             env: Vec::new(),
         })

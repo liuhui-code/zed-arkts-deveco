@@ -46,7 +46,7 @@ Section "Install"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoRepair" 1
 
   IfSilent install_done 0
-    MessageBox MB_OK|MB_ICONINFORMATION "ArkTS DevEco was installed. Restart Zed, then open an .ets file. The language server downloads automatically on first use."
+    MessageBox MB_OK|MB_ICONINFORMATION "ArkTS DevEco was installed. Restart Zed, then open an .ets file. Install DevEco CLI to enable the bundled build and run tasks."
   install_done:
 SectionEnd
 

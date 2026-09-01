@@ -1,12 +1,12 @@
 id = "arkts-deveco"
 name = "ArkTS DevEco"
-version = "0.1.0"
+version = "0.2.0"
 schema_version = 1
 authors = [
   "liuhui-code",
   "liuyanghejerry <liuyanghejerry@126.com>"
 ]
-description = "ArkTS syntax and language-server support for DevEco Studio projects"
+description = "ArkTS language support and DevEco CLI build tasks for HarmonyOS projects"
 repository = "https://github.com/liuhui-code/zed-arkts-deveco"
 license = "MIT"
 

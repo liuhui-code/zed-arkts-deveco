@@ -1,6 +1,6 @@
 # ArkTS DevEco for Zed
 
-面向 HarmonyOS / OpenHarmony 项目的 Zed ArkTS 开发扩展。它为 `.ets` 文件提供语法高亮和语言服务器能力，并自动发现常见位置中的 DevEco Studio SDK。
+面向 HarmonyOS / OpenHarmony 项目的 Zed ArkTS 开发扩展。它为 `.ets` 文件提供语言能力，并通过华为 DevEco CLI 在 Zed 中完成构建、检查、运行、设备查询和日志查看。
 
 > Windows Release 中的 EXE 是 **ArkTS 扩展安装器**，不是 Zed 编辑器本体。请先从 [Zed 官网](https://zed.dev/download) 安装 Zed。
 
@@ -13,6 +13,9 @@
 - 自动安装固定版本的 `@arkts/language-server@1.3.10`
 - 自动发现 macOS 和 Windows 常见 DevEco SDK 安装路径
 - 使用兼容代理处理 SDK 初始化参数和语言服务器退出流程
+- 扩展自带 Debug/Release 构建、清理、代码检查、运行、设备和日志任务
+- 构建任务直接调用华为 DevEco CLI，不重新实现 Hvigor、OHPM 或 HDC
+- 语言服务器优先使用全局 `node`，找不到时回退到 Zed 提供的 Node
 
 在一个真实 HarmonyOS 工程的协议验证中，语言服务器返回了 113 个补全项、1 个定义目标、10 处引用、2 个重命名编辑和 255 个工作区符号。实际结果会随项目和 SDK 版本变化。
 
@@ -35,6 +38,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 3. 运行安装器，然后重新启动 Zed。
 4. 打开 DevEco 工程根目录，再打开任意 `.ets` 文件。
 5. 首次使用时，Zed 会自动下载固定版本的 ArkTS language server。
+6. 按下面的说明安装 DevEco CLI，即可使用扩展自带的构建和运行任务。
 
 安装器按当前用户安装，无需管理员权限，也不会覆盖 `settings.json`。扩展安装到：
 
@@ -45,6 +49,37 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 可以在 Windows 的“设置 → 应用 → 已安装的应用”中卸载 `ArkTS DevEco for Zed`。
 
 首个版本未进行 Authenticode 代码签名，因此 SmartScreen 可能显示“未知发布者”。安装器由公开的 GitHub Actions 工作流构建；Release 同时提供 `SHA256SUMS.txt`。
+
+## 启用构建与运行
+
+构建任务依赖华为官方 DevEco CLI。请先安装 Node.js 22 或更高版本，并确保 `node`、`npm` 和 `devecocli` 位于全局 `PATH`：
+
+```sh
+node --version
+npm install -g @deveco/deveco-cli@stable
+devecocli --version
+```
+
+DevEco CLI 还需要以下任一环境：
+
+- DevEco Studio 6.0.0 或更高版本（Windows / macOS）
+- HarmonyOS Command Line Tools 26.0.0 或更高版本
+
+打开工程中的 `.ets` 文件后，运行命令面板中的 `task: spawn`，即可看到：
+
+| Zed 任务 | DevEco CLI 命令 | 用途 |
+|---|---|---|
+| `ArkTS: Build Debug` | `devecocli build --build-mode debug` | 构建 Debug 产物 |
+| `ArkTS: Build Release` | `devecocli build --build-mode release` | 构建 Release 产物 |
+| `ArkTS: Build and Run` | `devecocli run` | 构建、安装并启动应用 |
+| `ArkTS: Clean` | `devecocli build clean` | 清理构建产物 |
+| `ArkTS: Check Lint` | `devecocli check lint` | 执行官方代码检查 |
+| `ArkTS: List Devices` | `devecocli device list` | 查看真机和模拟器 |
+| `ArkTS: Device Logs` | `devecocli log` | 持续查看设备日志 |
+
+任务在 Zed 集成终端中运行并继承全局 Shell 环境、Node、npm 配置和 `.npmrc`。如果没有安装 DevEco CLI，编辑、补全和跳转仍然可用，但这些任务会提示找不到 `devecocli`。
+
+`Build and Run` 需要可用的调试签名和已连接设备；如果项目尚未配置签名，可先按照 DevEco CLI 文档运行 `devecocli signature generate`。
 
 ## 配置过程
 
@@ -68,7 +103,8 @@ Windows 用户配置文件位置：
 macOS / Linux 用户配置文件位置：
 
 ```text
-~/.config/zed/settings.json
+macOS: ~/Library/Application Support/Zed/settings.json
+Linux: ~/.config/zed/settings.json
 ```
 
 如果 SDK 不在标准目录，可以在初始化参数中显式设置：
@@ -90,6 +126,29 @@ macOS / Linux 用户配置文件位置：
 ```
 
 也可以把 [configs/project-settings.example.json](configs/project-settings.example.json) 复制为项目根目录下的 `.zed/settings.json`，让配置只作用于当前工程。
+
+### Node 与 Language Server 选择
+
+扩展默认从项目登录 Shell 的 `PATH` 查找全局 `node`；找不到时才使用 Zed 提供的 Node。`@arkts/language-server` 仍安装在扩展私有目录，不会污染全局 `node_modules`。
+
+DevEco CLI 已提供 `devecocli serve lsp --arkts` 官方 LSP 入口，但它要求 DevEco Studio 包含 `ace-server/out/standardIndex/index.js`。并非所有 DevEco Studio 版本都带有该入口，因此本扩展暂时保留经过验证的社区 language server 作为默认值。
+
+确认本机存在 `standardIndex/index.js` 后，可以显式切换到官方 LSP：
+
+```json5
+{
+  "lsp": {
+    "arkts-language-server": {
+      "binary": {
+        "path": "devecocli",
+        "arguments": ["serve", "lsp", "--arkts"]
+      }
+    }
+  }
+}
+```
+
+如果官方 LSP 无法初始化，删除 `binary` 配置即可恢复默认后端。
 
 ### 打开真实 DevEco 工程
 
@@ -142,13 +201,13 @@ cargo build --release --target wasm32-wasip2
 在 macOS / Linux 生成可移植扩展包：
 
 ```sh
-./scripts/package-extension.sh 0.1.0
+./scripts/package-extension.sh 0.2.0
 ```
 
 在 Windows 安装 Rust 与 [NSIS](https://nsis.sourceforge.io/) 后生成 EXE：
 
 ```powershell
-./scripts/package-windows.ps1 -Version 0.1.0
+./scripts/package-windows.ps1 -Version 0.2.0
 ```
 
 推送 `v*` 标签会触发公开的 GitHub Actions Release 工作流，构建、静默安装/卸载冒烟测试并发布 EXE、扩展压缩包和 SHA-256 校验文件。
@@ -165,10 +224,14 @@ cargo build --release --target wasm32-wasip2
 - [快捷键](https://zed.dev/docs/key-bindings)
 - [任务](https://zed.dev/docs/tasks)
 - [Zed 源代码](https://github.com/zed-industries/zed)
+- [DevEco CLI 官方仓库](https://gitcode.com/openharmony-sig/deveco-cli)
+- [HarmonyOS Command Line Tools](https://developer.huawei.com/consumer/cn/doc/doccenter-deveco-studio/ide-commandline-get)
 
 ## 项目边界
 
-本项目提供编辑、索引和导航能力。HarmonyOS 应用的编译、签名、模拟器、真机运行和发布仍由 DevEco Studio、Hvigor 与 HarmonyOS SDK 完成。
+本项目提供编辑、索引、导航以及 Zed 内的构建和运行入口。实际编译、签名、设备通信和日志能力由 DevEco CLI、DevEco Studio、Hvigor、OHPM、HDC 与 HarmonyOS SDK 提供。
+
+受当前 Zed 第三方扩展 API 限制，本扩展提供固定任务并在集成终端展示输出，暂时不能增加 DevEco 风格的自定义构建面板，也不能根据每个工程动态生成 product/module 菜单。复杂工程可以在项目 `.zed/tasks.json` 中覆盖或补充任务。
 
 ## 来源与许可证
 

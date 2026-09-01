@@ -16,6 +16,8 @@ jobs:
         run: cargo check --target wasm32-wasip2
       - name: Check proxy syntax
         run: node --check assets/ets-language-server.mjs
+      - name: Check bundled task definitions
+        run: node -e "JSON.parse(require('fs').readFileSync('languages/arkts/tasks.json', 'utf8'))"
       - name: Reject personal absolute paths
         run: |
           if git grep -n -E '/Users/[^/]+|[A-Z]:\\Users\\' -- . ':(exclude).github/workflows/ci.yml'; then
