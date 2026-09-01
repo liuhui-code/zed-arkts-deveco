@@ -44,11 +44,15 @@ Copy-Item (Join-Path $GrammarTemp "grammars\arkts.wasm") (Join-Path $Stage "gram
 $ExtensionArchive = Join-Path $Dist "zed-arkts-deveco-$Version.tar.gz"
 tar -czf $ExtensionArchive -C $Stage .
 
-$Makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
+$MakensisCommand = Get-Command makensis.exe -ErrorAction SilentlyContinue
+$MakensisCandidates = @(
+  $(if ($MakensisCommand) { $MakensisCommand.Source }),
+  (Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "NSIS\makensis.exe"),
+  (Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "NSIS\makensis.exe"),
+  $(if ($env:ChocolateyInstall) { Join-Path $env:ChocolateyInstall "bin\makensis.exe" })
+)
+$Makensis = $MakensisCandidates | Where-Object { $_ -and (Test-Path $_ -PathType Leaf) } | Select-Object -First 1
 if (-not $Makensis) {
-  $Makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
-}
-if (-not (Test-Path $Makensis)) {
   throw "NSIS makensis.exe was not found"
 }
 
