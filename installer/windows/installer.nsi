@@ -40,7 +40,7 @@ Section "Install"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoRepair" 1
 
-  IfSilent environment_done 0
+  IfSilent install_done 0
     ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\environment-check.ps1" -Mode Check -StatusFile "$INSTDIR\environment-status.ini"' $0
     StrCmp $0 0 environment_done
 
@@ -65,6 +65,7 @@ Section "Install"
   environment_done:
     Delete "$INSTDIR\environment-status.ini"
     MessageBox MB_OK|MB_ICONINFORMATION "ArkTS DevEco 已安装。请重启 Zed，然后打开 .ets 文件。"
+  install_done:
 SectionEnd
 
 Section "Uninstall"
