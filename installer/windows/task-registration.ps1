@@ -19,7 +19,18 @@ $installedHashFile = Join-Path $StateDir "tasks.arkts-deveco.sha256"
 function Get-FileSha256 {
   param([string]$Path)
 
-  return (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+      $bytes = $sha256.ComputeHash($stream)
+      return ([BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
 }
 
 function Find-TopLevelArrayBoundary {
@@ -206,9 +217,30 @@ function Install-GlobalTasks {
     $existingText.Substring($boundary.CloseIndex)
 
   $temporaryFile = "$TasksFile.arkts-deveco.tmp"
-  [IO.File]::WriteAllText($temporaryFile, $merged, [Text.UTF8Encoding]::new($false))
-  Move-Item $temporaryFile $TasksFile -Force
-  [IO.File]::WriteAllText($installedHashFile, (Get-FileSha256 $TasksFile), [Text.Encoding]::ASCII)
+  $rollbackFile = "$TasksFile.arkts-deveco.rollback"
+  $hashTemporaryFile = "$installedHashFile.tmp"
+  $tasksFileExisted = Test-Path $TasksFile -PathType Leaf
+  if ($tasksFileExisted) {
+    Copy-Item $TasksFile $rollbackFile -Force
+  }
+
+  try {
+    $utf8NoBom = New-Object Text.UTF8Encoding -ArgumentList $false
+    [IO.File]::WriteAllText($temporaryFile, $merged, $utf8NoBom)
+    $installedHash = Get-FileSha256 $temporaryFile
+    [IO.File]::WriteAllText($hashTemporaryFile, [string]$installedHash, [Text.Encoding]::ASCII)
+    Move-Item $temporaryFile $TasksFile -Force
+    Move-Item $hashTemporaryFile $installedHashFile -Force
+  } catch {
+    if ($tasksFileExisted -and (Test-Path $rollbackFile -PathType Leaf)) {
+      Move-Item $rollbackFile $TasksFile -Force
+    } elseif (-not $tasksFileExisted) {
+      Remove-Item $TasksFile -Force -ErrorAction SilentlyContinue
+    }
+    throw
+  } finally {
+    Remove-Item $temporaryFile, $rollbackFile, $hashTemporaryFile -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Uninstall-GlobalTasks {

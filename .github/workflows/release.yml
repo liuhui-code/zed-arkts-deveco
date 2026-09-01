@@ -52,6 +52,23 @@ jobs:
           foreach ($name in @("Zed", "Node", "Npm", "DevEcoCli", "DevEcoToolchain")) {
             if ($null -eq $status.Components.$name.Ready) { throw "Missing component status: $name" }
           }
+      - name: Validate Windows task registration
+        shell: pwsh
+        run: |
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          $script = (Resolve-Path "./installer/windows/task-registration.ps1").Path
+          $sourceTasks = (Resolve-Path "./languages/arkts/tasks.json").Path
+          $stateDirectory = Join-Path $env:RUNNER_TEMP "arkts-task-state"
+          $tasksFile = Join-Path $env:RUNNER_TEMP "zed-tasks.json"
+          $originalTasks = "// Preserve this comment`r`n[`r`n  {`r`n    `"label`": `"Existing Task`",`r`n    `"command`": `"echo existing`"`r`n  },`r`n]`r`n"
+          [IO.File]::WriteAllText($tasksFile, $originalTasks, [Text.UTF8Encoding]::new($false))
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $script -Mode Install -StateDir $stateDirectory -SourceTasks $sourceTasks -TasksFile $tasksFile
+          if ($LASTEXITCODE -ne 0) { throw "Task registration failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $stateDirectory "tasks.arkts-deveco.sha256"))) { throw "Task registration did not save its state hash" }
+          if ([IO.File]::ReadAllText($tasksFile) -notmatch 'ArkTS: Build Debug') { throw "Task registration did not add ArkTS tasks" }
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $script -Mode Uninstall -StateDir $stateDirectory -TasksFile $tasksFile
+          if ($LASTEXITCODE -ne 0) { throw "Task unregistration failed with exit code $LASTEXITCODE" }
+          if ([IO.File]::ReadAllText($tasksFile) -cne $originalTasks) { throw "Task unregistration did not restore the original file" }
       - name: Build extension and Windows installer
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Version "${{ steps.version.outputs.value }}"
