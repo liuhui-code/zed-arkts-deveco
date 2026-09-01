@@ -7,6 +7,26 @@ import { spawn } from 'node:child_process'
 const serverPath = fileURLToPath(
   new URL('./node_modules/@arkts/language-server/out/index.mjs', import.meta.url),
 )
+const defaultHeapLimitMb = 1536
+
+function heapLimitMb() {
+  const configured = process.env.ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB
+  if (configured === undefined || configured === '') return defaultHeapLimitMb
+  if (!/^\d+$/.test(configured)) return defaultHeapLimitMb
+  const parsed = Number(configured)
+  return Number.isSafeInteger(parsed) ? parsed : defaultHeapLimitMb
+}
+
+function serverArguments() {
+  const limit = heapLimitMb()
+  const hasNodeOptionsLimit = /(?:^|\s)--max[-_]old[-_]space[-_]size(?:=|\s|$)/
+    .test(process.env.NODE_OPTIONS ?? '')
+  return [
+    ...(limit > 0 && !hasNodeOptionsLimit ? [`--max-old-space-size=${limit}`] : []),
+    serverPath,
+    '--stdio',
+  ]
+}
 
 function firstExisting(paths) {
   return paths.filter(Boolean).find((path) => existsSync(path))
@@ -48,7 +68,7 @@ function addSdkDefaults(message) {
   return message
 }
 
-const child = spawn(process.execPath, [serverPath, '--stdio'], {
+const child = spawn(process.execPath, serverArguments(), {
   cwd: process.cwd(),
   env: { ...process.env, PATH: process.env.PATH?.split(delimiter).join(delimiter) },
   stdio: ['pipe', 'pipe', 'pipe'],

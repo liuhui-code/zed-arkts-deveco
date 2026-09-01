@@ -135,6 +135,8 @@ Linux: ~/.config/zed/settings.json
 
 扩展默认从项目登录 Shell 的 `PATH` 查找全局 `node`；找不到时才使用 Zed 提供的 Node。`@arkts/language-server` 仍安装在扩展私有目录，不会污染全局 `node_modules`。
 
+为防止大型项目中的 Language Server 在 V8 延迟回收期间增长到数 GB，扩展默认把其 old-space 上限设为 1536 MB。可以在启动 Zed 前通过 `ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB` 调整；设为 `0` 可关闭此限制。已有的 `NODE_OPTIONS=--max-old-space-size=...` 优先。
+
 DevEco CLI 已提供 `devecocli serve lsp --arkts` 官方 LSP 入口，但它要求 DevEco Studio 包含 `ace-server/out/standardIndex/index.js`。并非所有 DevEco Studio 版本都带有该入口，因此本扩展暂时保留经过验证的社区 language server 作为默认值。
 
 确认本机存在 `standardIndex/index.js` 后，可以显式切换到官方 LSP：
