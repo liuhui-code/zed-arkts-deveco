@@ -47,6 +47,7 @@ tar -czf $ExtensionArchive -C $Stage .
 $MakensisCommand = Get-Command makensis.exe -ErrorAction SilentlyContinue
 $MakensisCandidates = @(
   $(if ($MakensisCommand) { $MakensisCommand.Source }),
+  $(if ($env:NSIS_HOME) { Join-Path $env:NSIS_HOME "makensis.exe" }),
   (Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "NSIS\makensis.exe"),
   (Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "NSIS\makensis.exe"),
   $(if ($env:ChocolateyInstall) { Join-Path $env:ChocolateyInstall "bin\makensis.exe" })

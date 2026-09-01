@@ -31,17 +31,27 @@ jobs:
       - name: Install NSIS
         shell: pwsh
         run: |
-          $candidates = @(
-            (Join-Path ([Environment]::GetFolderPath("ProgramFilesX86")) "NSIS\makensis.exe"),
-            (Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "NSIS\makensis.exe"),
-            (Join-Path $env:ChocolateyInstall "bin\makensis.exe")
-          )
+          $archive = Join-Path $env:RUNNER_TEMP "nsis-3.12.zip"
+          $toolsDirectory = Join-Path $env:RUNNER_TEMP "nsis-tools"
           foreach ($attempt in 1..3) {
-            choco install nsis --no-progress -y
-            if ($candidates | Where-Object { Test-Path $_ }) { exit 0 }
-            if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
+            try {
+              Invoke-WebRequest "https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download" -OutFile $archive
+              break
+            } catch {
+              if ($attempt -eq 3) { throw }
+              Start-Sleep -Seconds 10
+            }
           }
-          throw "Chocolatey did not install makensis.exe after 3 attempts"
+          $expectedHash = "56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f"
+          $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "Unexpected NSIS archive SHA-256: $actualHash"
+          }
+          Expand-Archive $archive $toolsDirectory
+          $nsisHome = Join-Path $toolsDirectory "nsis-3.12"
+          if (-not (Test-Path (Join-Path $nsisHome "makensis.exe"))) { throw "NSIS archive does not contain makensis.exe" }
+          $nsisHome >> $env:GITHUB_PATH
+          "NSIS_HOME=$nsisHome" >> $env:GITHUB_ENV
       - name: Validate Windows environment detector
         shell: pwsh
         run: |
