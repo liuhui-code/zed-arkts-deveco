@@ -1,0 +1,22 @@
+id = "arkts-deveco"
+name = "ArkTS DevEco"
+version = "0.1.0"
+schema_version = 1
+authors = [
+  "liuhui-code",
+  "liuyanghejerry <liuyanghejerry@126.com>"
+]
+description = "ArkTS syntax and language-server support for DevEco Studio projects"
+repository = "https://github.com/liuhui-code/zed-arkts-deveco"
+license = "MIT"
+
+[grammars.arkts]
+repository = "https://github.com/liuyanghejerry/tree-sitter-arkts.git"
+rev = "2b3d4b944ea4417729ebcd030834a5352cff7bb2"
+
+[language_servers.arkts-language-server]
+name = "ArkTS Language Server"
+languages = ["ArkTS DevEco"]
+
+[language_servers.arkts-language-server.language_ids]
+"ArkTS DevEco" = "ets"

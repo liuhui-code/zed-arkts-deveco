@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust WASI target
+        run: rustup target add wasm32-wasip2
+      - name: Check extension
+        run: cargo check --target wasm32-wasip2
+      - name: Check proxy syntax
+        run: node --check assets/ets-language-server.mjs
+      - name: Reject personal absolute paths
+        run: |
+          if grep -R -n -E '/Users/[^/]+|[A-Z]:\\Users\\' --exclude-dir=.git .; then
+            exit 1
+          fi

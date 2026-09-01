@@ -1,0 +1,6 @@
+/target/
+/dist/
+/grammars/
+/extension.wasm
+.DS_Store
+*.log
