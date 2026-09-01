@@ -1,0 +1,24 @@
+{
+  // 使用接近 VS Code 的默认快捷键。
+  "base_keymap": "VSCode",
+  "project_panel": {
+    "dock": "left"
+  },
+  "terminal": {
+    "dock": "bottom"
+  },
+  "languages": {
+    "ArkTS DevEco": {
+      "format_on_save": "off",
+      "semantic_tokens": "combined",
+      "tab_size": 2
+    }
+  },
+  "lsp": {
+    "arkts-language-server": {
+      "initialization_options": {
+        "debug": false
+      }
+    }
+  }
+}

@@ -18,6 +18,6 @@ jobs:
         run: node --check assets/ets-language-server.mjs
       - name: Reject personal absolute paths
         run: |
-          if grep -R -n -E '/Users/[^/]+|[A-Z]:\\Users\\' --exclude-dir=.git .; then
+          if git grep -n -E '/Users/[^/]+|[A-Z]:\\Users\\' -- . ':(exclude).github/workflows/ci.yml'; then
             exit 1
           fi

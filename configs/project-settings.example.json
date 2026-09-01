@@ -1,0 +1,16 @@
+{
+  "languages": {
+    "ArkTS DevEco": {
+      "format_on_save": "off",
+      "semantic_tokens": "combined",
+      "tab_size": 2
+    }
+  },
+  "lsp": {
+    "arkts-language-server": {
+      "initialization_options": {
+        "debug": false
+      }
+    }
+  }
+}

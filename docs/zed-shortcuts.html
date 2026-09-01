@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Zed × ArkTS 快捷键工作台</title>
+  <style>
+    :root {
+      --ink: #edf3e9;
+      --muted: #94a194;
+      --paper: #101411;
+      --panel: #171c18;
+      --panel-2: #1d231e;
+      --line: #303a31;
+      --acid: #c7ff5e;
+      --amber: #ffb847;
+      --cyan: #73e2d0;
+      --danger: #ff756b;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .34);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 88% 9%, rgba(199, 255, 94, .08), transparent 25rem),
+        linear-gradient(rgba(115, 226, 208, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(115, 226, 208, .035) 1px, transparent 1px),
+        var(--paper);
+      background-size: auto, 32px 32px, 32px 32px, auto;
+      font-family: "Avenir Next", "Noto Sans SC", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .shell {
+      width: min(1460px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 38px 0 64px;
+    }
+
+    .masthead {
+      position: relative;
+      overflow: hidden;
+      min-height: 260px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(250px, .7fr);
+      gap: 28px;
+      align-items: end;
+      padding: clamp(28px, 5vw, 62px);
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(31, 39, 32, .97), rgba(19, 24, 20, .98));
+      box-shadow: var(--shadow);
+    }
+
+    .masthead::before {
+      content: "F12";
+      position: absolute;
+      right: -18px;
+      top: -76px;
+      color: rgba(199, 255, 94, .055);
+      font: 900 clamp(170px, 25vw, 360px)/1 "DIN Condensed", "Arial Narrow", sans-serif;
+      letter-spacing: -.08em;
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .tag {
+      padding: 6px 10px 5px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: rgba(8, 12, 9, .48);
+      font: 700 11px/1.2 "SFMono-Regular", "JetBrains Mono", monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 860px;
+      margin: 0;
+      font: 900 clamp(45px, 7.4vw, 112px)/.82 "DIN Condensed", "Arial Narrow", sans-serif;
+      letter-spacing: -.035em;
+      text-transform: uppercase;
+    }
+
+    h1 span { color: var(--acid); }
+
+    .intro {
+      max-width: 740px;
+      margin: 24px 0 0;
+      color: #b7c2b7;
+      font-size: clamp(15px, 1.5vw, 19px);
+      line-height: 1.72;
+    }
+
+    .status-card {
+      position: relative;
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 22px;
+      border-left: 3px solid var(--acid);
+      background: rgba(5, 9, 6, .6);
+    }
+
+    .status-label {
+      color: var(--acid);
+      font: 700 12px/1.2 "SFMono-Regular", "JetBrains Mono", monospace;
+      letter-spacing: .14em;
+    }
+
+    .status-number {
+      margin-top: 20px;
+      font: 900 clamp(58px, 8vw, 110px)/.8 "DIN Condensed", sans-serif;
+    }
+
+    .status-copy {
+      margin-top: 20px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .toolbar {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto auto;
+      gap: 12px;
+      margin: 18px 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: rgba(16, 20, 17, .92);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 10px 34px rgba(0, 0, 0, .24);
+    }
+
+    .search-wrap { position: relative; }
+    .search-wrap::before {
+      content: "/";
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--acid);
+      font: 800 18px/1 monospace;
+    }
+
+    #search {
+      width: 100%;
+      height: 46px;
+      padding: 0 44px;
+      border: 1px solid var(--line);
+      outline: none;
+      color: var(--ink);
+      background: #0b0f0c;
+      font-family: "SFMono-Regular", "JetBrains Mono", monospace;
+    }
+
+    #search:focus { border-color: var(--acid); box-shadow: inset 0 0 0 1px var(--acid); }
+
+    .segmented { display: flex; border: 1px solid var(--line); }
+    .segmented button, .print-btn {
+      min-height: 44px;
+      padding: 0 18px;
+      border: 0;
+      cursor: pointer;
+      color: var(--muted);
+      background: #0b0f0c;
+      font: 800 12px/1 "SFMono-Regular", "JetBrains Mono", monospace;
+      letter-spacing: .06em;
+      transition: color .15s ease, background .15s ease;
+    }
+
+    .segmented button + button { border-left: 1px solid var(--line); }
+    .segmented button.active { color: #0b100b; background: var(--acid); }
+    .print-btn { border: 1px solid var(--line); }
+    .print-btn:hover { color: var(--ink); border-color: var(--amber); }
+
+    .category-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 28px;
+    }
+
+    .category-bar button {
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      cursor: pointer;
+      color: var(--muted);
+      background: transparent;
+      font: 700 12px/1 "SFMono-Regular", "JetBrains Mono", monospace;
+    }
+
+    .category-bar button.active { color: var(--acid); border-color: var(--acid); }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-bottom: 28px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+
+    .legend > div { padding: 16px 18px; background: var(--panel); }
+    .legend b { color: var(--amber); font: 800 12px/1 monospace; }
+    .legend span { display: block; margin-top: 7px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .shortcut {
+      position: relative;
+      display: grid;
+      grid-template-columns: 44px minmax(170px, .9fr) minmax(210px, 1.1fr);
+      gap: 16px;
+      align-items: center;
+      min-height: 112px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: linear-gradient(115deg, var(--panel), var(--panel-2));
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+      animation: enter .38s both;
+      animation-delay: calc(var(--i) * 16ms);
+    }
+
+    .shortcut:hover {
+      z-index: 2;
+      transform: translateY(-2px);
+      border-color: #647065;
+      background: #202721;
+    }
+
+    .shortcut.core { border-left: 3px solid var(--acid); }
+    .index { color: #687469; font: 800 12px/1 monospace; }
+    .shortcut h2 { margin: 0; font-size: 17px; line-height: 1.25; }
+    .shortcut p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .keys {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+    }
+
+    kbd {
+      min-width: 33px;
+      padding: 8px 9px 7px;
+      border: 1px solid #546055;
+      border-bottom-width: 3px;
+      border-radius: 5px;
+      color: #f6faef;
+      background: #0b0f0c;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, .28);
+      text-align: center;
+      font: 800 13px/1 "SFMono-Regular", "JetBrains Mono", monospace;
+      white-space: nowrap;
+    }
+
+    .then { padding: 0 3px; color: var(--amber); font: 900 12px/1 monospace; }
+    .empty { grid-column: 1 / -1; padding: 72px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
+
+    .note {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      padding: 22px;
+      border: 1px solid rgba(255, 184, 71, .42);
+      background: rgba(255, 184, 71, .055);
+    }
+
+    .note-mark { color: var(--amber); font: 900 28px/1 monospace; }
+    .note h3 { margin: 0 0 8px; color: var(--amber); font-size: 15px; }
+    .note p { margin: 0; color: #bdc5bc; line-height: 1.65; }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 34px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font: 12px/1.6 "SFMono-Regular", "JetBrains Mono", monospace;
+    }
+
+    footer a { color: var(--cyan); text-decoration: none; }
+    .toast {
+      position: fixed;
+      z-index: 50;
+      right: 22px;
+      bottom: 22px;
+      padding: 12px 16px;
+      border: 1px solid var(--acid);
+      color: #081008;
+      background: var(--acid);
+      font: 800 12px/1.3 monospace;
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 980px) {
+      .masthead { grid-template-columns: 1fr; }
+      .status-card { min-height: 160px; }
+      .toolbar { grid-template-columns: 1fr auto; }
+      .print-btn { display: none; }
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 20px, 1460px); padding-top: 10px; }
+      .masthead { padding: 26px 20px; }
+      .toolbar { grid-template-columns: 1fr; top: 0; }
+      .segmented button { flex: 1; }
+      .legend { grid-template-columns: 1fr; }
+      .shortcut { grid-template-columns: 34px 1fr; }
+      .keys { grid-column: 1 / -1; justify-content: flex-start; padding-left: 50px; }
+      footer { flex-direction: column; }
+    }
+
+    @media print {
+      :root { --ink: #111; --muted: #555; --paper: #fff; --panel: #fff; --panel-2: #fff; --line: #bbb; }
+      @page { size: A4 landscape; margin: 10mm; }
+      body { background: #fff; color: #111; }
+      .shell { width: 100%; padding: 0; }
+      .masthead { min-height: 0; padding: 18px 22px; grid-template-columns: 1fr auto; box-shadow: none; background: #fff; }
+      .masthead::before, .intro, .toolbar, .category-bar, .legend, .note, .toast { display: none !important; }
+      h1 { font-size: 40px; color: #111; }
+      h1 span { color: #111; }
+      .status-card { min-width: 180px; min-height: 0; padding: 10px 14px; color: #111; background: #fff; }
+      .status-number { font-size: 35px; margin-top: 8px; }
+      .status-copy { margin-top: 8px; }
+      .grid { grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+      .shortcut { min-height: 76px; padding: 9px; grid-template-columns: 24px 1fr; gap: 8px; break-inside: avoid; box-shadow: none; background: #fff; animation: none; }
+      .shortcut h2 { font-size: 12px; }
+      .shortcut p { display: none; }
+      .keys { grid-column: 1 / -1; justify-content: flex-start; padding-left: 32px; gap: 3px; }
+      kbd { min-width: 24px; padding: 4px 5px; color: #111; background: #fff; border-color: #777; box-shadow: none; font-size: 9px; }
+      footer { margin-top: 8px; padding-top: 8px; font-size: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <section>
+        <div class="eyebrow">
+          <span class="tag">Zed 1.17.x</span>
+          <span class="tag">Base keymap: VS Code</span>
+          <span class="tag">ArkTS operator card</span>
+        </div>
+        <h1>Zed <span>× ArkTS</span><br>快捷键工作台</h1>
+        <p class="intro">为跳转、查询和补全而整理。搜索任意功能，切换系统键位，点击一张卡片即可复制快捷键。所有内容都在这个文件里，可离线使用。</p>
+      </section>
+      <aside class="status-card">
+        <div class="status-label">ACTIVE SHORTCUTS</div>
+        <div class="status-number" id="count">00</div>
+        <div class="status-copy"><span id="os-name">macOS</span> · 当前筛选结果<br>来源：Zed 官方默认键位</div>
+      </aside>
+    </header>
+
+    <section class="toolbar" aria-label="快捷键工具栏">
+      <label class="search-wrap">
+        <input id="search" type="search" placeholder="搜索：引用、终端、F12、rename…" autocomplete="off">
+      </label>
+      <div class="segmented" role="group" aria-label="操作系统">
+        <button type="button" data-os="mac" class="active">macOS</button>
+        <button type="button" data-os="win">Windows</button>
+      </div>
+      <button class="print-btn" type="button" id="print">PRINT / PDF</button>
+    </section>
+
+    <nav class="category-bar" id="categories" aria-label="快捷键分类"></nav>
+
+    <section class="legend">
+      <div><b>⌘ / Ctrl</b><span>macOS 的 Command 对应 Windows 的 Control，但少数键位并非简单替换。</span></div>
+      <div><b>CHORD</b><span>看到橙色箭头时，先按第一组，松开后再按第二组，不是同时按。</span></div>
+      <div><b>CLICK TO COPY</b><span>点击任意快捷键卡片，复制当前系统下的按键文字。</span></div>
+    </section>
+
+    <section class="grid" id="grid" aria-live="polite"></section>
+
+    <aside class="note">
+      <div class="note-mark">!</div>
+      <div>
+        <h3>最容易记错：查找引用</h3>
+        <p>Zed 当前 VS Code 键位中，“查找所有引用”是 <strong>Alt + Shift + F12</strong>。macOS 的 <strong>Shift + F12</strong> 是“转到实现”，Windows 的“转到实现”则是 <strong>Ctrl + F12</strong>。Mac 功能键若控制音量/亮度，可能还需同时按 <strong>Fn</strong>。</p>
+      </div>
+    </aside>
+
+    <footer>
+      <span>生成于 2026-09-01 · 当前配置：VS Code base keymap</span>
+      <span>
+        官方来源：
+        <a href="https://github.com/zed-industries/zed/blob/main/assets/keymaps/default-macos.json">macOS keymap</a>
+        / <a href="https://github.com/zed-industries/zed/blob/main/assets/keymaps/default-windows.json">Windows keymap</a>
+      </span>
+    </footer>
+  </main>
+  <div class="toast" id="toast">已复制</div>
+
+  <script>
+    const shortcuts = [
+      { c:'ArkTS 核心', core:1, n:'自动补全', d:'调用 ArkTS LSP 补全列表', mac:[['⌃','Space']], win:[['Ctrl','Space']] },
+      { c:'ArkTS 核心', core:1, n:'转到定义', d:'跳转到符号定义；Mac 可能需要 Fn', mac:[['F12']], win:[['F12']] },
+      { c:'ArkTS 核心', core:1, n:'查找所有引用', d:'列出当前符号的全部引用', mac:[['⌥','⇧','F12']], win:[['Alt','Shift','F12']] },
+      { c:'ArkTS 核心', core:1, n:'重命名符号', d:'跨文件安全重命名', mac:[['F2']], win:[['F2']] },
+      { c:'ArkTS 核心', core:1, n:'显示悬停信息', d:'类型、文档与签名信息；顺序按键', mac:[['⌘','K'],['⌘','I']], win:[['Ctrl','K'],['Ctrl','I']] },
+      { c:'ArkTS 核心', core:1, n:'快速修复 / Code Action', d:'显示当前诊断可用操作', mac:[['⌘','.']], win:[['Ctrl','.']] },
+      { c:'ArkTS 核心', core:1, n:'下一条诊断', d:'跳到下一处警告或错误', mac:[['F8']], win:[['F8']] },
+      { c:'ArkTS 核心', core:1, n:'上一条诊断', d:'返回上一处警告或错误', mac:[['⇧','F8']], win:[['Shift','F8']] },
+
+      { c:'导航查询', n:'转到实现', d:'跳转到接口或抽象成员的实现', mac:[['⇧','F12']], win:[['Ctrl','F12']] },
+      { c:'导航查询', n:'在右侧打开定义', d:'保留当前文件并分栏查看定义', mac:[['⌥','F12']], win:[['Alt','F12']] },
+      { c:'导航查询', n:'返回上一位置', d:'沿编辑导航历史后退', mac:[['⌃','-']], win:[['Alt','←']] },
+      { c:'导航查询', n:'前进到下一位置', d:'沿编辑导航历史前进', mac:[['⌃','⇧','-']], win:[['Alt','→']] },
+      { c:'导航查询', n:'项目符号', d:'按名称搜索工作区类、函数和变量', mac:[['⌘','T']], win:[['Ctrl','T']] },
+      { c:'导航查询', n:'诊断面板', d:'汇总当前项目问题', mac:[['⌘','⇧','M']], win:[['Ctrl','Shift','M']] },
+      { c:'导航查询', n:'大纲面板', d:'显示当前文件结构', mac:[['⌘','⇧','B']], win:[['Ctrl','Shift','B']] },
+      { c:'导航查询', n:'选择语言模式', d:'手动把文件切换为 ArkTS DevEco', mac:[['⌘','K'],['M']], win:[['Ctrl','K'],['M']] },
+
+      { c:'搜索文件', n:'命令面板', d:'搜索并运行 Zed 的全部命令', mac:[['⌘','⇧','P']], win:[['Ctrl','Shift','P']] },
+      { c:'搜索文件', n:'快速打开文件', d:'按文件名搜索当前项目', mac:[['⌘','P']], win:[['Ctrl','P']] },
+      { c:'搜索文件', n:'项目全文搜索', d:'搜索整个工作区内容', mac:[['⌘','⇧','F']], win:[['Ctrl','Shift','F']] },
+      { c:'搜索文件', n:'当前文件查找', d:'在活动文件中搜索', mac:[['⌘','F']], win:[['Ctrl','F']] },
+      { c:'搜索文件', n:'下一个匹配', d:'移动到下一项搜索结果', mac:[['⌘','G']], win:[['F3']] },
+      { c:'搜索文件', n:'选择全部匹配', d:'搜索框激活时批量选择结果', mac:[['⌥','Enter']], win:[['Alt','Enter']] },
+      { c:'搜索文件', n:'打开文件 / 项目', d:'从文件系统选择路径', mac:[['⌘','O']], win:[['Ctrl','O']] },
+
+      { c:'编辑', n:'格式化文档', d:'调用当前语言格式化器', mac:[['⌘','⇧','I']], win:[['Shift','Alt','F']] },
+      { c:'编辑', n:'切换行注释', d:'注释或取消注释当前行/选区', mac:[['⌘','/']], win:[['Ctrl','/']] },
+      { c:'编辑', n:'选择下一个同名项', d:'逐个添加同词多光标', mac:[['⌘','D']], win:[['Ctrl','D']] },
+      { c:'编辑', n:'选择全部同名项', d:'一次选择所有相同文本', mac:[['⌘','⇧','L']], win:[['Ctrl','Shift','L']] },
+      { c:'编辑', n:'向上添加光标', d:'在上一行相同列添加光标', mac:[['⌘','⌥','↑']], win:[['Ctrl','Alt','↑']] },
+      { c:'编辑', n:'向下添加光标', d:'在下一行相同列添加光标', mac:[['⌘','⌥','↓']], win:[['Ctrl','Alt','↓']] },
+      { c:'编辑', n:'上移 / 下移行', d:'保持缩进移动当前行或选区', mac:[['⌥','↑ / ↓']], win:[['Alt','↑ / ↓']] },
+      { c:'编辑', n:'复制行到上 / 下', d:'快速复制当前行或选区', mac:[['⌥','⇧','↑ / ↓']], win:[['Alt','Shift','↑ / ↓']] },
+      { c:'编辑', n:'删除当前行', d:'不需要先选择整行', mac:[['⌘','⇧','K']], win:[['Ctrl','Shift','K']] },
+      { c:'编辑', n:'保存', d:'保存活动文件', mac:[['⌘','S']], win:[['Ctrl','S']] },
+      { c:'编辑', n:'撤销 / 重做', d:'撤销或恢复最近编辑', mac:[['⌘','Z / ⇧ Z']], win:[['Ctrl','Z / Y']] },
+
+      { c:'界面终端', n:'项目面板', d:'切换并聚焦左侧文件树', mac:[['⌘','⇧','E']], win:[['Ctrl','Shift','E']] },
+      { c:'界面终端', n:'显示 / 隐藏终端', d:'切换底部终端面板', mac:[['⌃','`']], win:[['Ctrl','`']] },
+      { c:'界面终端', n:'新建终端', d:'创建新的终端标签', mac:[['⌃','~']], win:[['Ctrl','Shift','`']] },
+      { c:'界面终端', n:'向右分栏', d:'把编辑区拆成左右两个窗格', mac:[['⌘','\\']], win:[['Ctrl','\\']] },
+      { c:'界面终端', n:'按方向分栏', d:'顺序按键；最后使用方向键', mac:[['⌘','K'],['↑ / ↓ / ← / →']], win:[['Ctrl','K'],['↑ / ↓ / ← / →']] },
+      { c:'界面终端', n:'切换标签页', d:'在最近使用的文件之间切换', mac:[['⌃','Tab']], win:[['Ctrl','Tab']] },
+      { c:'界面终端', n:'关闭当前标签', d:'关闭活动文件标签', mac:[['⌘','W']], win:[['Ctrl','W']] },
+      { c:'界面终端', n:'恢复关闭的标签', d:'重新打开最近关闭的文件', mac:[['⌘','⇧','T']], win:[['Ctrl','Shift','T']] },
+      { c:'界面终端', n:'打开快捷键配置', d:'查看或覆盖 keymap.json', mac:[['⌘','K'],['⌘','S']], win:[['Ctrl','K'],['Ctrl','S']] },
+      { c:'界面终端', n:'关闭窗口', d:'关闭当前 Zed 窗口', mac:[['⌘','⇧','W']], win:[['Ctrl','Shift','W']] },
+    ]
+
+    const state = {
+      os: localStorage.getItem('zed-shortcuts-os') || (navigator.platform.toLowerCase().includes('win') ? 'win' : 'mac'),
+      category: '全部',
+      query: '',
+    }
+
+    const grid = document.querySelector('#grid')
+    const search = document.querySelector('#search')
+    const count = document.querySelector('#count')
+    const osName = document.querySelector('#os-name')
+    const toast = document.querySelector('#toast')
+    const categories = ['全部', ...new Set(shortcuts.map(item => item.c))]
+
+    function shortcutText(groups) {
+      return groups.map(group => group.join('+')).join('，然后 ')
+    }
+
+    function renderKeys(groups) {
+      return groups.map((group, index) => `${index ? '<span class="then">THEN →</span>' : ''}${group.map(key => `<kbd>${key}</kbd>`).join('')}`).join('')
+    }
+
+    function renderCategories() {
+      document.querySelector('#categories').innerHTML = categories.map(category =>
+        `<button type="button" class="${category === state.category ? 'active' : ''}" data-category="${category}">${category}</button>`
+      ).join('')
+    }
+
+    function render() {
+      document.querySelectorAll('[data-os]').forEach(button => button.classList.toggle('active', button.dataset.os === state.os))
+      osName.textContent = state.os === 'mac' ? 'macOS' : 'Windows'
+      renderCategories()
+
+      const query = state.query.trim().toLowerCase()
+      const filtered = shortcuts.filter(item => {
+        const categoryMatch = state.category === '全部' || item.c === state.category
+        const haystack = `${item.n} ${item.d} ${item.c} ${shortcutText(item.mac)} ${shortcutText(item.win)}`.toLowerCase()
+        return categoryMatch && (!query || haystack.includes(query))
+      })
+
+      count.textContent = String(filtered.length).padStart(2, '0')
+      if (!filtered.length) {
+        grid.innerHTML = '<div class="empty">没有匹配项。试试“引用”“终端”或“F12”。</div>'
+        return
+      }
+
+      grid.innerHTML = filtered.map((item, index) => `
+        <article class="shortcut ${item.core ? 'core' : ''}" style="--i:${index}" tabindex="0" data-index="${shortcuts.indexOf(item)}" aria-label="复制 ${item.n} 快捷键">
+          <span class="index">${String(index + 1).padStart(2, '0')}</span>
+          <div><h2>${item.n}</h2><p>${item.c} · ${item.d}</p></div>
+          <div class="keys">${renderKeys(item[state.os])}</div>
+        </article>
+      `).join('')
+    }
+
+    function copyCard(card) {
+      const item = shortcuts[Number(card.dataset.index)]
+      const text = `${item.n}：${shortcutText(item[state.os])}`
+      navigator.clipboard?.writeText(text)
+      toast.textContent = `已复制 · ${text}`
+      toast.classList.add('show')
+      clearTimeout(copyCard.timer)
+      copyCard.timer = setTimeout(() => toast.classList.remove('show'), 1500)
+    }
+
+    document.addEventListener('click', event => {
+      const osButton = event.target.closest('[data-os]')
+      if (osButton) {
+        state.os = osButton.dataset.os
+        localStorage.setItem('zed-shortcuts-os', state.os)
+        render()
+        return
+      }
+      const categoryButton = event.target.closest('[data-category]')
+      if (categoryButton) {
+        state.category = categoryButton.dataset.category
+        render()
+        return
+      }
+      const card = event.target.closest('.shortcut')
+      if (card) copyCard(card)
+    })
+
+    document.addEventListener('keydown', event => {
+      if (event.key === '/' && document.activeElement !== search) {
+        event.preventDefault()
+        search.focus()
+      }
+      const card = event.target.closest?.('.shortcut')
+      if (card && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault()
+        copyCard(card)
+      }
+    })
+
+    search.addEventListener('input', () => { state.query = search.value; render() })
+    document.querySelector('#print').addEventListener('click', () => window.print())
+    render()
+  </script>
+</body>
+</html>
