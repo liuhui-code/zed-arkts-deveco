@@ -34,10 +34,20 @@ jobs:
       - name: Validate Windows environment detector
         shell: pwsh
         run: |
-          $json = & ./installer/windows/environment-check.ps1 -Mode Check -Json
-          $exitCode = $LASTEXITCODE
-          if ($exitCode -notin @(0, 2)) { throw "Unexpected detector exit code: $exitCode" }
-          $status = $json | ConvertFrom-Json
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          $script = (Resolve-Path "./installer/windows/environment-check.ps1").Path
+          $statusFile = Join-Path $env:RUNNER_TEMP "environment-status.ini"
+          $stdout = Join-Path $env:RUNNER_TEMP "environment-status.json"
+          $stderr = Join-Path $env:RUNNER_TEMP "environment-status.err"
+          $process = Start-Process $powershell -ArgumentList @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $script,
+            "-Mode", "Check", "-StatusFile", $statusFile, "-Json"
+          ) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 2)) {
+            throw "Unexpected detector exit code $($process.ExitCode): $(Get-Content $stderr -Raw)"
+          }
+          if (-not (Test-Path $statusFile)) { throw "Detector did not write the NSIS status file" }
+          $status = Get-Content $stdout -Raw | ConvertFrom-Json
           if ($null -eq $status.Ready -or -not $status.Summary) { throw "Detector returned an incomplete status" }
           foreach ($name in @("Zed", "Node", "Npm", "DevEcoCli", "DevEcoToolchain")) {
             if ($null -eq $status.Components.$name.Ready) { throw "Missing component status: $name" }
