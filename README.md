@@ -121,7 +121,8 @@ Linux: ~/.config/zed/settings.json
         "debug": false,
         "ets": {
           "sdkPath": "D:\\Huawei\\Sdk\\openharmony",
-          "hmsPath": "D:\\Huawei\\Sdk\\hms"
+          "hmsPath": "D:\\Huawei\\Sdk\\hms",
+          "semanticTokens": false
         }
       }
     }
@@ -136,6 +137,8 @@ Linux: ~/.config/zed/settings.json
 扩展默认从项目登录 Shell 的 `PATH` 查找全局 `node`；找不到时才使用 Zed 提供的 Node。`@arkts/language-server` 仍安装在扩展私有目录，不会污染全局 `node_modules`。
 
 为防止大型项目中的 Language Server 在 V8 延迟回收期间增长到数 GB，扩展默认把其 old-space 上限设为 1536 MB。可以在启动 Zed 前通过 `ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB` 调整；设为 `0` 可关闭此限制。已有的 `NODE_OPTIONS=--max-old-space-size=...` 优先。
+
+扩展还会默认关闭 ArkTS LSP 语义着色请求，保留 Zed 的 Tree-sitter 语法着色、补全、诊断和跳转。压力测试中，启动语义着色会让单个 LSP 进程超过 4 GB；关闭后不会再发送该批请求。需要自行启用时，同时设置语言的 `"semantic_tokens": "combined"` 和初始化参数 `"ets": { "semanticTokens": true }`。取值含义参见 [Zed Semantic Tokens 官方文档](https://zed.dev/docs/semantic-tokens)。
 
 DevEco CLI 已提供 `devecocli serve lsp --arkts` 官方 LSP 入口，但它要求 DevEco Studio 包含 `ace-server/out/standardIndex/index.js`。并非所有 DevEco Studio 版本都带有该入口，因此本扩展暂时保留经过验证的社区 language server 作为默认值。
 
