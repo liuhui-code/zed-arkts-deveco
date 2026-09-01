@@ -58,11 +58,13 @@ function discoverSdk() {
 function addSdkDefaults(message) {
   if (message?.method !== 'initialize') return message
 
+  const options = (message.params.initializationOptions ??= {})
+  const ets = (options.ets ??= {})
+  ets.semanticTokens ??= false
+
   const discovered = discoverSdk()
   if (!discovered) return message
 
-  const options = (message.params.initializationOptions ??= {})
-  const ets = (options.ets ??= {})
   ets.sdkPath ??= discovered.sdkPath
   ets.hmsPath ??= discovered.hmsPath
   return message
@@ -74,11 +76,12 @@ const child = spawn(process.execPath, serverArguments(), {
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 
-child.stdout.pipe(process.stdout)
 child.stderr.pipe(process.stderr)
 
 let input = Buffer.alloc(0)
+let serverOutput = Buffer.alloc(0)
 let closing = false
+const initializeRequests = new Map()
 
 function writeMessage(stream, message) {
   const body = Buffer.from(JSON.stringify(message))
@@ -92,6 +95,42 @@ function stop(code = 0) {
   child.kill()
   setTimeout(() => process.exit(code), 100).unref()
 }
+
+child.stdout.on('data', (chunk) => {
+  serverOutput = Buffer.concat([
+    serverOutput,
+    Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+  ])
+
+  while (true) {
+    const headerEnd = serverOutput.indexOf('\r\n\r\n')
+    if (headerEnd < 0) return
+    const header = serverOutput.subarray(0, headerEnd).toString('ascii')
+    const length = Number(header.match(/Content-Length:\s*(\d+)/i)?.[1])
+    if (!Number.isFinite(length)) return
+
+    const bodyStart = headerEnd + 4
+    if (serverOutput.length < bodyStart + length) return
+    const body = serverOutput.subarray(bodyStart, bodyStart + length).toString('utf8')
+    serverOutput = serverOutput.subarray(bodyStart + length)
+
+    let message
+    try {
+      message = JSON.parse(body)
+    } catch {
+      continue
+    }
+
+    if (message?.id !== undefined && initializeRequests.has(message.id)) {
+      const semanticTokensEnabled = initializeRequests.get(message.id)
+      initializeRequests.delete(message.id)
+      if (!semanticTokensEnabled && message.result?.capabilities) {
+        delete message.result.capabilities.semanticTokensProvider
+      }
+    }
+    writeMessage(process.stdout, message)
+  }
+})
 
 process.stdin.on('data', (chunk) => {
   input = Buffer.concat([input, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)])
@@ -120,7 +159,14 @@ process.stdin.on('data', (chunk) => {
     } else if (message?.method === 'exit') {
       stop(0)
     } else {
-      writeMessage(child.stdin, addSdkDefaults(message))
+      const forwarded = addSdkDefaults(message)
+      if (forwarded?.method === 'initialize' && forwarded.id !== undefined) {
+        initializeRequests.set(
+          forwarded.id,
+          forwarded.params?.initializationOptions?.ets?.semanticTokens === true,
+        )
+      }
+      writeMessage(child.stdin, forwarded)
     }
   }
 })

@@ -10,14 +10,17 @@
   "languages": {
     "ArkTS DevEco": {
       "format_on_save": "off",
-      "semantic_tokens": "combined",
+      "semantic_tokens": "off",
       "tab_size": 2
     }
   },
   "lsp": {
     "arkts-language-server": {
       "initialization_options": {
-        "debug": false
+        "debug": false,
+        "ets": {
+          "semanticTokens": false
+        }
       }
     }
   }
