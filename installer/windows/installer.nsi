@@ -60,7 +60,7 @@ Section "Install"
     ReadINIStr $1 "$INSTDIR\environment-status.ini" "environment" "summary"
     StrCmp $1 "" 0 +2
       StrCpy $1 "无法确认开发环境是否完整。"
-    MessageBox MB_YESNO|MB_ICONQUESTION "$1$\r$\n$\r$\n是否现在修复可自动处理的项目？安装器会通过 winget 安装 Zed/Node.js，通过 npm 安装 DevEco CLI；缺少 DevEco Studio/Command Line Tools 时会打开官方下载页。" IDNO environment_declined
+    MessageBox MB_YESNO|MB_ICONQUESTION "$1$\r$\n$\r$\n是否现在修复可自动处理的项目？安装器会通过 winget 安装缺少的 Node.js，并通过 npm 安装缺少的 DevEco CLI。" IDNO environment_declined
 
     ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\environment-check.ps1" -Mode Repair -StatusFile "$INSTDIR\environment-status.ini"' $2
     StrCmp $2 0 environment_repaired

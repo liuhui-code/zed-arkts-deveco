@@ -63,8 +63,32 @@ jobs:
           if (-not (Test-Path $statusFile)) { throw "Detector did not write the NSIS status file" }
           $status = Get-Content $stdout -Raw | ConvertFrom-Json
           if ($null -eq $status.Ready -or -not $status.Summary) { throw "Detector returned an incomplete status" }
-          foreach ($name in @("Zed", "Node", "Npm", "DevEcoCli", "DevEcoToolchain")) {
+          foreach ($name in @("Node", "DevEcoCli")) {
             if ($null -eq $status.Components.$name.Ready) { throw "Missing component status: $name" }
+          }
+          $unexpected = @($status.Components.PSObject.Properties.Name | Where-Object { $_ -notin @("Node", "DevEcoCli") })
+          if ($unexpected.Count -ne 0) { throw "Unexpected environment requirements: $($unexpected -join ', ')" }
+
+          $fakeBin = Join-Path $env:RUNNER_TEMP "presence-only-tools"
+          New-Item -ItemType Directory -Force -Path $fakeBin | Out-Null
+          [IO.File]::WriteAllText((Join-Path $fakeBin "node.cmd"), "@echo off`r`necho v16.20.2`r`n", [Text.Encoding]::ASCII)
+          [IO.File]::WriteAllText((Join-Path $fakeBin "devecocli.cmd"), "@echo off`r`necho 0.1.0`r`n", [Text.Encoding]::ASCII)
+          $env:Path = "$fakeBin;$env:Path"
+          $presenceStdout = Join-Path $env:RUNNER_TEMP "presence-only-status.json"
+          $presenceStderr = Join-Path $env:RUNNER_TEMP "presence-only-status.err"
+          $presenceProcess = Start-Process $powershell -ArgumentList @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $script,
+            "-Mode", "Check", "-Json"
+          ) -RedirectStandardOutput $presenceStdout -RedirectStandardError $presenceStderr -Wait -PassThru
+          if ($presenceProcess.ExitCode -ne 0) {
+            throw "Detector rejected usable commands without supported version thresholds: $(Get-Content $presenceStderr -Raw)"
+          }
+          $presenceStatus = Get-Content $presenceStdout -Raw | ConvertFrom-Json
+          if (-not $presenceStatus.Components.Node.Ready -or -not $presenceStatus.Components.DevEcoCli.Ready) {
+            throw "Detector did not accept usable Node.js and DevEco CLI commands"
+          }
+          if ($presenceStatus.Components.Node.Requirement -match "\d") {
+            throw "Node.js requirement still contains a version threshold"
           }
       - name: Validate Windows task registration
         shell: pwsh

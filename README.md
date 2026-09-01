@@ -39,7 +39,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 3. 运行安装器，然后重新启动 Zed。
 4. 打开 DevEco 工程根目录，再打开任意 `.ets` 文件。
 5. 首次使用时，Zed 会自动下载固定版本的 ArkTS language server。
-6. 安装器会检测 Zed、Node.js、npm、DevEco CLI 和 DevEco 工具链；环境满足要求时不显示更新提示，缺项时才询问是否修复。
+6. 安装器只检测 `node` 和 `devecocli` 命令是否已安装且可以运行，不比较版本号；两项都可用时不显示更新提示，缺项时才询问是否修复。
 
 安装器按当前用户安装，无需管理员权限，也不会覆盖 `settings.json`。扩展安装到：
 
@@ -49,7 +49,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 
 可以在 Windows 的“设置 → 应用 → 已安装的应用”中卸载 `ArkTS DevEco for Zed`。
 
-环境修复由用户明确确认后才执行：安装器优先通过 `winget` 安装缺失的 Zed/Node.js LTS，通过 `npm` 安装缺失的 DevEco CLI；系统没有 `winget` 时改为打开相应下载页。DevEco Studio 或 Command Line Tools 缺失时只打开官方下载页。用户可以拒绝，扩展仍会正常安装，编辑、补全和跳转不受影响。静默安装模式不会弹窗，也不会修改开发环境。
+环境修复由用户明确确认后才执行：安装器通过 `winget` 安装缺失的 Node.js，通过 `npm` 安装缺失的 DevEco CLI；系统没有 `winget` 时改为打开 Node.js 下载页。Zed、npm、DevEco Studio 和 Command Line Tools 不参与环境通过条件，也不会被安装器强制更新。用户可以拒绝，扩展仍会正常安装，编辑、补全和跳转不受影响。静默安装模式不会弹窗，也不会修改开发环境。
 
 无论是否接受环境修复，Windows 安装器都会把 ArkTS 构建任务安全合并到 `%APPDATA%\Zed\tasks.json`，因此任务不再依赖当前是否打开 `.ets` 文件。合并会保留原文件内容并保存恢复副本；卸载时仅在文件未被用户继续修改的情况下恢复原配置。缺少 DevEco CLI 时任务仍会显示，但执行后会在终端提示找不到 `devecocli`。
 
@@ -57,7 +57,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 
 ## 启用构建与运行
 
-构建任务依赖华为官方 DevEco CLI。请先安装 Node.js 22 或更高版本，并确保 `node`、`npm` 和 `devecocli` 位于全局 `PATH`：
+构建任务依赖华为官方 DevEco CLI。请先安装 Node.js 和 DevEco CLI，并确保 `node` 和 `devecocli` 位于全局 `PATH`：
 
 ```sh
 node --version
@@ -65,10 +65,7 @@ npm install -g @deveco/deveco-cli@latest
 devecocli --version
 ```
 
-DevEco CLI 还需要以下任一环境：
-
-- DevEco Studio 6.0.0 或更高版本（Windows / macOS）
-- HarmonyOS Command Line Tools 26.0.0 或更高版本
+安装器不会比较 Node.js、DevEco Studio 或 Command Line Tools 的版本。若现有工具链与 DevEco CLI 或具体项目不兼容，构建命令会在执行时报告实际错误。
 
 打开工程中的 `.ets` 文件后，运行命令面板中的 `task: spawn`，即可看到：
 
