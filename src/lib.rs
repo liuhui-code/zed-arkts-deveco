@@ -15,6 +15,22 @@ struct ArkTsDevEcoExtension {
     cached_proxy_path: Option<String>,
 }
 
+fn with_semantic_tokens_default(
+    mut options: zed::serde_json::Value,
+) -> Result<zed::serde_json::Value, String> {
+    let root = options
+        .as_object_mut()
+        .ok_or_else(|| "ArkTS initialization_options must be a JSON object".to_string())?;
+    let ets = root
+        .entry("ets")
+        .or_insert_with(|| zed::serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "ArkTS initialization_options.ets must be a JSON object".to_string())?;
+    ets.entry("semanticTokens")
+        .or_insert(zed::serde_json::Value::Bool(false));
+    Ok(options)
+}
+
 impl ArkTsDevEcoExtension {
     fn server_exists() -> bool {
         fs::metadata(SERVER_MODULE).is_ok_and(|metadata| metadata.is_file())
@@ -121,8 +137,31 @@ impl zed::Extension for ArkTsDevEcoExtension {
             .ok()
             .and_then(|settings| settings.initialization_options)
             .unwrap_or_else(|| zed::serde_json::json!({ "debug": false }));
-        Ok(Some(options))
+        Ok(Some(with_semantic_tokens_default(options)?))
     }
 }
 
 zed::register_extension!(ArkTsDevEcoExtension);
+
+#[cfg(test)]
+mod tests {
+    use super::{with_semantic_tokens_default, zed};
+
+    #[test]
+    fn disables_semantic_tokens_by_default() {
+        let options = with_semantic_tokens_default(zed::serde_json::json!({ "debug": false }))
+            .expect("valid initialization options");
+
+        assert_eq!(options["ets"]["semanticTokens"], false);
+    }
+
+    #[test]
+    fn preserves_explicit_semantic_tokens_setting() {
+        let options = with_semantic_tokens_default(zed::serde_json::json!({
+            "ets": { "semanticTokens": true }
+        }))
+        .expect("valid initialization options");
+
+        assert_eq!(options["ets"]["semanticTokens"], true);
+    }
+}

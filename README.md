@@ -136,7 +136,9 @@ Linux: ~/.config/zed/settings.json
 
 扩展默认从项目登录 Shell 的 `PATH` 查找全局 `node`；找不到时才使用 Zed 提供的 Node。`@arkts/language-server` 仍安装在扩展私有目录，不会污染全局 `node_modules`。
 
-0.3.3 是用于定位大型项目内存问题的诊断版本，不宣称已经修复根因。扩展默认把 Language Server 的 old-space 上限设为 4096 MB，以便完成 4 GB 复现场景并保留诊断记录；可以在启动 Zed 前通过 `ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB` 调整，设为 `0` 可关闭限制。已有的 `NODE_OPTIONS=--max-old-space-size=...` 优先。
+0.3.4 是用于定位大型项目内存问题的诊断版本，不宣称已经修复根因。扩展默认把 Language Server 的 old-space 上限设为 4096 MB，以便完成 4 GB 复现场景并保留诊断记录；可以在启动 Zed 前通过 `ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB` 调整，设为 `0` 可关闭限制。已有的 `NODE_OPTIONS=--max-old-space-size=...` 优先。
+
+为避免 ArkTS Language Server 的 Semantic Tokens 与 Zed 的 Tree-sitter 高亮叠加，0.3.4 默认向 Language Server 传递 `ets.semanticTokens=false`。语法高亮仍由 Tree-sitter 提供，补全、跳转、引用、Hover 和诊断等其他 LSP 能力不受影响。需要重新启用语义着色时，可在 `initialization_options.ets` 中显式设置 `"semanticTokens": true`。
 
 诊断日志默认启用，不记录文件正文，包含 LSP 方法、文件 URI、本机 SDK 路径、项目 root/source 文件分类、Program 创建耗时、子进程 RSS 和退出码。路径本身可能包含用户名或项目名，对外提交前请先检查。设置 `ARKTS_LSP_DIAGNOSTICS=0` 可以关闭。
 
@@ -148,7 +150,7 @@ Windows 日志目录：
 
 在开始菜单运行 `ArkTS DevEco → Export Diagnostics`，会在桌面生成 `ArkTSDevEco-diagnostics-<时间>.zip`，其中包含 ArkTS 日志、环境摘要以及可找到的 Zed 日志。诊断包不会包含项目源码。macOS 日志位于 `~/Library/Logs/ArkTSDevEco`，Linux 位于 `~/.local/state/ArkTSDevEco/logs`。
 
-诊断 Language Server 的源码固定在 [`liuhui-code/arkTS` 的 `zed-arkts-deveco-v0.3.3` 标签](https://github.com/liuhui-code/arkTS/tree/zed-arkts-deveco-v0.3.3)，安装包中携带的 `assets/diagnostic-language-server.mjs` 由该源码构建。
+诊断 Language Server 的源码固定在 [`liuhui-code/arkTS` 的 `zed-arkts-deveco-v0.3.4` 标签](https://github.com/liuhui-code/arkTS/tree/zed-arkts-deveco-v0.3.4)，安装包中携带的 `assets/diagnostic-language-server.mjs` 由该源码构建。
 
 DevEco CLI 已提供 `devecocli serve lsp --arkts` 官方 LSP 入口，但它要求 DevEco Studio 包含 `ace-server/out/standardIndex/index.js`。并非所有 DevEco Studio 版本都带有该入口，因此本扩展暂时保留经过验证的社区 language server 作为默认值。
 
@@ -220,13 +222,13 @@ cargo build --release --target wasm32-wasip2
 在 macOS / Linux 生成可移植扩展包：
 
 ```sh
-./scripts/package-extension.sh 0.3.3
+./scripts/package-extension.sh 0.3.4
 ```
 
 在 Windows 安装 Rust 与 [NSIS](https://nsis.sourceforge.io/) 后生成 EXE：
 
 ```powershell
-./scripts/package-windows.ps1 -Version 0.3.3
+./scripts/package-windows.ps1 -Version 0.3.4
 ```
 
 推送 `v*` 标签会触发公开的 GitHub Actions Release 工作流，构建、静默安装/卸载冒烟测试并发布 EXE、扩展压缩包和 SHA-256 校验文件。
