@@ -165,6 +165,20 @@ function Format-TaskJson {
   return (($json -split "`r?`n" | ForEach-Object { "  $_" }) -join "`r`n")
 }
 
+function Read-TaskDefinitions {
+  param([string]$Path)
+
+  # Windows PowerShell 5.1 can preserve a top-level JSON array as one pipeline
+  # object. Copy every element into a generic list so later property access is
+  # identical on Windows PowerShell 5.1 and PowerShell 7.
+  $parsed = ConvertFrom-Json -InputObject (Get-Content $Path -Raw -Encoding UTF8)
+  $definitions = New-Object 'System.Collections.Generic.List[object]'
+  foreach ($definition in $parsed) {
+    [void]$definitions.Add($definition)
+  }
+  return $definitions
+}
+
 function Install-GlobalTasks {
   if (-not $SourceTasks -or -not (Test-Path $SourceTasks -PathType Leaf)) {
     throw "Bundled ArkTS task definitions were not found"
@@ -174,7 +188,7 @@ function Install-GlobalTasks {
   $tasksDirectory = Split-Path -Parent $TasksFile
   New-Item $tasksDirectory -ItemType Directory -Force | Out-Null
 
-  $source = @(Get-Content $SourceTasks -Raw -Encoding UTF8 | ConvertFrom-Json)
+  $source = @(Read-TaskDefinitions $SourceTasks)
   if ($source.Count -eq 0) {
     throw "Bundled ArkTS task definitions are empty"
   }
@@ -184,8 +198,12 @@ function Install-GlobalTasks {
       throw "ArkTS DevEco command wrapper was not found: $CommandWrapper"
     }
     foreach ($task in $source) {
-      if ($task.command -eq "devecocli") {
-        $task.command = $CommandWrapper
+      $commandProperty = $task.PSObject.Properties["command"]
+      if (-not $commandProperty) {
+        throw "Bundled ArkTS task '$($task.label)' is missing its command property"
+      }
+      if ($commandProperty.Value -eq "devecocli") {
+        $commandProperty.Value = $CommandWrapper
       }
     }
   }
