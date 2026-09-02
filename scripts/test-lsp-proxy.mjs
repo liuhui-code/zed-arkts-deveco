@@ -12,8 +12,9 @@ const proxy = spawn(process.execPath, [resolve('assets/ets-language-server.mjs')
   env: {
     ...process.env,
     ARKTS_LSP_SERVER_PATH: resolve('scripts/fixtures/fake-lsp-server.mjs'),
-    ARKTS_LSP_BACKEND_KIND: 'official-devecocli-test-double',
-    ARKTS_LSP_BACKEND_COMMAND: process.execPath,
+    ARKTS_LSP_BACKEND_KIND: 'auto-devecocli',
+    ARKTS_LSP_BACKEND_COMMAND: 'devecocli',
+    ARKTS_DEVECO_CLI_PATH: process.execPath,
     ARKTS_LSP_BACKEND_ARGS_JSON: JSON.stringify([
       resolve('scripts/fixtures/fake-lsp-server.mjs'),
       '--stdio',
@@ -104,7 +105,7 @@ assert.ok(proxyLog, 'proxy JSONL log was not created')
 const logText = readFileSync(join(logDirectory, proxyLog), 'utf8')
 const records = logText.trim().split(/\r?\n/).map(line => JSON.parse(line))
 assert.ok(records.some(record => record.event === 'proxy-start' && record.heapLimitMb === 128))
-assert.ok(records.some(record => record.event === 'proxy-start' && record.selectedBackend === 'official-devecocli-test-double'))
+assert.ok(records.some(record => record.event === 'proxy-start' && record.selectedBackend === 'official-devecocli'))
 assert.ok(records.some(record => record.event === 'child-memory' && record.rssMiB > 0))
 assert.ok(records.some(record => record.event === 'lsp-message' && record.direction === 'client-to-server' && record.method === 'textDocument/didOpen' && record.textBytes === 18))
 assert.ok(records.some(record => record.event === 'lsp-message' && record.direction === 'server-to-client' && record.requestMethod === 'textDocument/definition' && record.durationMs >= 0))
@@ -114,7 +115,9 @@ assert.equal(logText.includes('TOP-SECRET-CONTENT'), false, 'document contents l
 const summaryName = readdirSync(logDirectory).find(file => file.startsWith('session-summary-') && file.endsWith('.json'))
 assert.ok(summaryName, 'human-readable session summary was not created')
 const summary = JSON.parse(readFileSync(join(logDirectory, summaryName), 'utf8'))
-assert.equal(summary.selectedBackend, 'official-devecocli-test-double')
+assert.equal(summary.requestedBackend, 'auto-devecocli')
+assert.equal(summary.selectedBackend, 'official-devecocli')
+assert.equal(summary.backendCommand, process.execPath)
 assert.equal(summary.initialized, true)
 assert.equal(summary.status, 'stopped')
 assert.equal(summary.rootUri, 'file:///diagnostic-project')

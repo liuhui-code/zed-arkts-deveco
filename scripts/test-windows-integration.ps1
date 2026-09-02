@@ -18,13 +18,13 @@ $originalIndex = @{
 [IO.File]::WriteAllText($indexFile, $originalIndex, [Text.UTF8Encoding]::new($false))
 
 $registration = Join-Path $root "installer\windows\extension-registration.ps1"
-& $registration -Mode Prepare -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+& $registration -Mode Prepare -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.1"
 Remove-Item $extensionDirectory -Recurse -Force
 New-Item $extensionDirectory -ItemType Directory -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $extensionDirectory "extension.toml"), "id = `"arkts`"`nrepository = `"https://github.com/liuhui-code/zed-arkts-deveco`"`n", [Text.UTF8Encoding]::new($false))
-& $registration -Mode Install -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+& $registration -Mode Install -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.1"
 $registered = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
-if ($registered.extensions.arkts.manifest.version -ne "0.4.0") { throw "Packaged extension was not registered" }
+if ($registered.extensions.arkts.manifest.version -ne "0.4.1") { throw "Packaged extension was not registered" }
 & $registration -Mode Uninstall -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile
 $restored = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
 if ($restored.extensions.arkts.manifest.repository -ne "https://example.invalid/original") { throw "Previous extension registration was not restored" }
@@ -43,7 +43,10 @@ if ([IO.File]::ReadAllText($tasksFile) -cne $originalTasks) { throw "Existing ta
 $fakeBin = Join-Path $testRoot "bin"
 New-Item $fakeBin -ItemType Directory -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $fakeBin "node.cmd"), "@echo off`r`necho v22.0.0`r`n", [Text.Encoding]::ASCII)
-[IO.File]::WriteAllText((Join-Path $fakeBin "devecocli.cmd"), "@echo off`r`necho fake-devecocli %*`r`n", [Text.Encoding]::ASCII)
+$env:APPDATA = Join-Path $testRoot "app-data"
+$npmGlobalBin = Join-Path $env:APPDATA "npm"
+New-Item $npmGlobalBin -ItemType Directory -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $npmGlobalBin "devecocli.cmd"), "@echo off`r`necho fake-devecocli %*`r`n", [Text.Encoding]::ASCII)
 $env:Path = "$fakeBin;$env:Path"
 $env:LOCALAPPDATA = Join-Path $testRoot "local-app-data"
 & (Join-Path $root "installer\windows\deveco-command.ps1") build --build-mode debug
@@ -51,5 +54,6 @@ if ($LASTEXITCODE -ne 0) { throw "Command wrapper changed the CLI exit code" }
 $summaryFile = Get-Item (Join-Path $env:LOCALAPPDATA "ArkTSDevEco\logs\command-summary-*.json")
 $summary = [IO.File]::ReadAllText($summaryFile.FullName) | ConvertFrom-Json
 if ($summary.status -ne "succeeded" -or ($summary.arguments -join " ") -ne "build --build-mode debug") { throw "Command summary is incomplete" }
+if ($summary.resolvedCommand -ne (Join-Path $npmGlobalBin "devecocli.cmd")) { throw "Command wrapper did not discover the default npm global bin directory" }
 
 Write-Host "Windows extension, task, and command integration tests passed"

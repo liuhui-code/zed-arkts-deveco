@@ -5,7 +5,7 @@ param(
   [string]$Mode,
   [Parameter(Mandatory = $true)]
   [string]$StateDir,
-  [string]$Version = "0.4.0",
+  [string]$Version = "0.4.1",
   [string]$ExtensionDir = (Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts"),
   [string]$IndexFile = (Join-Path $env:LOCALAPPDATA "Zed\extensions\index.json")
 )

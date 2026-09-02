@@ -32,6 +32,24 @@ function Resolve-Application {
       return $command.Source
     }
   }
+
+  if ($Names -contains "devecocli") {
+    $candidates = @()
+    if ($env:APPDATA) {
+      $candidates += Join-Path $env:APPDATA "npm\devecocli.cmd"
+    }
+    $npm = Get-Command @("npm.cmd", "npm.exe", "npm") -CommandType Application -ErrorAction SilentlyContinue |
+      Select-Object -First 1
+    if ($npm) {
+      try {
+        $prefix = ((& $npm.Source config get prefix 2>$null | Select-Object -Last 1) | Out-String).Trim()
+        if ($prefix) { $candidates += Join-Path $prefix "devecocli.cmd" }
+      } catch {}
+    }
+    foreach ($candidate in $candidates | Where-Object { $_ } | Select-Object -Unique) {
+      if (Test-Path $candidate -PathType Leaf) { return (Resolve-Path $candidate).Path }
+    }
+  }
   return $null
 }
 
