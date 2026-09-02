@@ -18,13 +18,13 @@ $originalIndex = @{
 [IO.File]::WriteAllText($indexFile, $originalIndex, [Text.UTF8Encoding]::new($false))
 
 $registration = Join-Path $root "installer\windows\extension-registration.ps1"
-& $registration -Mode Prepare -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+& $registration -Mode Prepare -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.1"
 Remove-Item $extensionDirectory -Recurse -Force
 New-Item $extensionDirectory -ItemType Directory -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $extensionDirectory "extension.toml"), "id = `"arkts`"`nrepository = `"https://github.com/liuhui-code/zed-arkts-deveco`"`n", [Text.UTF8Encoding]::new($false))
-& $registration -Mode Install -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+& $registration -Mode Install -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.1"
 $registered = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
-if ($registered.extensions.arkts.manifest.version -ne "0.4.0") { throw "Packaged extension was not registered" }
+if ($registered.extensions.arkts.manifest.version -ne "0.4.1") { throw "Packaged extension was not registered" }
 & $registration -Mode Uninstall -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile
 $restored = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
 if ($restored.extensions.arkts.manifest.repository -ne "https://example.invalid/original") { throw "Previous extension registration was not restored" }

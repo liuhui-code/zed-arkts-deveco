@@ -11,7 +11,7 @@ const fallbackServerPath = process.env.ARKTS_LSP_SERVER_PATH
   ? resolve(process.env.ARKTS_LSP_SERVER_PATH)
   : fileURLToPath(new URL('./node_modules/@arkts/language-server/out/index.mjs', import.meta.url))
 const defaultHeapLimitMb = 4096
-const diagnosticBuild = process.env.ARKTS_LSP_DIAGNOSTIC_BUILD ?? '0.4.0'
+const diagnosticBuild = process.env.ARKTS_LSP_DIAGNOSTIC_BUILD ?? '0.4.1'
 const diagnosticsEnabled = process.env.ARKTS_LSP_DIAGNOSTICS !== '0'
 const memoryIntervalMs = Math.max(100, Number(process.env.ARKTS_LSP_MEMORY_INTERVAL_MS) || 5_000)
 const sessionId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
@@ -70,6 +70,8 @@ const sessionSummary = {
   diagnosticBuild,
   startedAt: new Date().toISOString(),
   status: 'starting',
+  requestedBackend: process.env.ARKTS_LSP_BACKEND_KIND ?? 'community-fallback',
+  requestedBackendCommand: process.env.ARKTS_LSP_BACKEND_COMMAND ?? process.execPath,
   selectedBackend: process.env.ARKTS_LSP_BACKEND_KIND ?? 'community-fallback',
   backendCommand: process.env.ARKTS_LSP_BACKEND_COMMAND ?? process.execPath,
   backendArguments: parseBackendArguments(),
@@ -148,12 +150,52 @@ function serverArguments() {
   ]
 }
 
-const backendKind = sessionSummary.selectedBackend
-const backendCommand = sessionSummary.backendCommand
-const backendArguments = sessionSummary.backendArguments ?? serverArguments()
+function discoverDevEcoCli(configuredCommand) {
+  const candidates = []
+  if (process.env.ARKTS_DEVECO_CLI_PATH) candidates.push(process.env.ARKTS_DEVECO_CLI_PATH)
+  if (configuredCommand && /[\\/]/.test(configuredCommand)) candidates.push(configuredCommand)
+
+  if (process.platform === 'win32') {
+    if (process.env.LOCALAPPDATA) {
+      const statusFile = join(process.env.LOCALAPPDATA, 'ArkTSDevEco', 'environment-check.json')
+      try {
+        const status = JSON.parse(readFileSync(statusFile, 'utf8'))
+        candidates.push(status?.components?.DevEcoCli?.Path)
+      } catch {}
+    }
+    if (process.env.APPDATA) candidates.push(join(process.env.APPDATA, 'npm', 'devecocli.cmd'))
+  }
+
+  const executableNames = process.platform === 'win32'
+    ? ['devecocli.cmd', 'devecocli.exe', 'devecocli.bat', 'devecocli']
+    : ['devecocli']
+  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
+    for (const name of executableNames) candidates.push(join(directory, name))
+  }
+
+  return candidates.filter(Boolean).find(candidate => {
+    try { return statSync(candidate).isFile() } catch { return false }
+  })
+}
+
+let backendKind = sessionSummary.selectedBackend
+let backendCommand = sessionSummary.backendCommand
+let backendArguments = sessionSummary.backendArguments
+if (backendKind === 'auto-devecocli') {
+  const discoveredCommand = discoverDevEcoCli(backendCommand)
+  if (discoveredCommand) {
+    backendKind = 'official-devecocli'
+    backendCommand = discoveredCommand
+  } else {
+    backendKind = 'community-fallback'
+    backendCommand = process.execPath
+    backendArguments = serverArguments()
+  }
+}
+backendArguments ??= serverArguments()
 const backendCwd = sessionSummary.backendCwd
 const backendUsesShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(backendCommand)
-sessionSummary.backendArguments = backendArguments
+Object.assign(sessionSummary, { selectedBackend: backendKind, backendCommand, backendArguments })
 
 function firstExisting(paths) {
   return paths.filter(Boolean).find(path => existsSync(path))

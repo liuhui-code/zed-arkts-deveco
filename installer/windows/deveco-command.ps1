@@ -37,9 +37,44 @@ function Write-Summary {
 
 function Resolve-Application {
   param([string[]]$Names)
+
+  $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  $pathEntries = @($env:Path, $machinePath, $userPath) |
+    Where-Object { $_ } |
+    ForEach-Object { $_ -split ";" } |
+    Where-Object { $_ } |
+    Select-Object -Unique
+  $env:Path = $pathEntries -join ";"
+
   foreach ($name in $Names) {
     $command = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
+  }
+
+  if ($Names -contains "devecocli") {
+    $candidates = @()
+    if ($env:APPDATA) {
+      $candidates += Join-Path $env:APPDATA "npm\devecocli.cmd"
+    }
+    $environmentCheck = Join-Path $stateDirectory "environment-check.json"
+    if (Test-Path $environmentCheck -PathType Leaf) {
+      try {
+        $recorded = [IO.File]::ReadAllText($environmentCheck) | ConvertFrom-Json
+        $candidates += $recorded.components.DevEcoCli.Path
+      } catch {}
+    }
+    $npm = Get-Command @("npm.cmd", "npm.exe", "npm") -CommandType Application -ErrorAction SilentlyContinue |
+      Select-Object -First 1
+    if ($npm) {
+      try {
+        $prefix = ((& $npm.Source config get prefix 2>$null | Select-Object -Last 1) | Out-String).Trim()
+        if ($prefix) { $candidates += Join-Path $prefix "devecocli.cmd" }
+      } catch {}
+    }
+    foreach ($candidate in $candidates | Where-Object { $_ } | Select-Object -Unique) {
+      if (Test-Path $candidate -PathType Leaf) { return (Resolve-Path $candidate).Path }
+    }
   }
   return $null
 }
@@ -98,7 +133,7 @@ if (-not $devecocli) {
   $summary.finishedAt = (Get-Date).ToUniversalTime().ToString("o")
   Write-Summary $summary
   Write-Event "command-not-found" @{ command = "devecocli"; exitCode = 127 }
-  [Console]::Error.WriteLine("ArkTS DevEco: devecocli was not found in PATH. Run: npm install -g @deveco/deveco-cli@stable")
+  [Console]::Error.WriteLine("ArkTS DevEco: devecocli was not found in PATH, the npm global prefix, or %APPDATA%\npm. Run: npm install -g @deveco/deveco-cli@stable")
   exit 127
 }
 

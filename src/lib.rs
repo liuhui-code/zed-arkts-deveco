@@ -6,7 +6,7 @@ use zed_extension_api as zed;
 
 const PACKAGE_NAME: &str = "@arkts/language-server";
 const PACKAGE_VERSION: &str = "1.3.10";
-const PRODUCT_VERSION: &str = "0.4.0";
+const PRODUCT_VERSION: &str = "0.4.1";
 const SERVER_MODULE: &str = "node_modules/@arkts/language-server/out/index.mjs";
 const PROXY_FILE: &str = "ets-language-server.mjs";
 const PROXY_SOURCE: &str = include_str!("../assets/ets-language-server.mjs");
@@ -100,14 +100,6 @@ impl ArkTsDevEcoExtension {
         Ok(path)
     }
 
-    fn server_module_path() -> Result<String, String> {
-        Ok(env::current_dir()
-            .map_err(|error| format!("failed to locate extension work directory: {error}"))?
-            .join(SERVER_MODULE)
-            .to_string_lossy()
-            .into_owned())
-    }
-
     fn proxy_command(
         &mut self,
         worktree: &Worktree,
@@ -184,9 +176,9 @@ impl zed::Extension for ArkTsDevEcoExtension {
         self.ensure_language_server(language_server_id)?;
         self.proxy_command(
             worktree,
-            "community-fallback",
-            &zed::node_binary_path()?,
-            vec![Self::server_module_path()?, "--stdio".to_string()],
+            "auto-devecocli",
+            "devecocli",
+            official_lsp_arguments(worktree.root_path()),
         )
     }
 

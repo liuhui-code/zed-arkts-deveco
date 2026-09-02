@@ -9,6 +9,35 @@ $ErrorActionPreference = "Stop"
 $stateDirectory = Join-Path $env:LOCALAPPDATA "ArkTSDevEco"
 $logDirectory = Join-Path $stateDirectory "logs"
 
+function Resolve-DevEcoCli {
+  $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  $pathEntries = @($env:Path, $machinePath, $userPath) |
+    Where-Object { $_ } |
+    ForEach-Object { $_ -split ";" } |
+    Where-Object { $_ } |
+    Select-Object -Unique
+  $env:Path = $pathEntries -join ";"
+
+  $command = Get-Command @("devecocli.cmd", "devecocli.exe", "devecocli") -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($command) { return $command.Source }
+
+  $candidates = @()
+  if ($env:APPDATA) { $candidates += Join-Path $env:APPDATA "npm\devecocli.cmd" }
+  $environmentCheck = Join-Path $stateDirectory "environment-check.json"
+  if (Test-Path $environmentCheck -PathType Leaf) {
+    try {
+      $recorded = [IO.File]::ReadAllText($environmentCheck) | ConvertFrom-Json
+      $candidates += $recorded.components.DevEcoCli.Path
+    } catch {}
+  }
+  foreach ($candidate in $candidates | Where-Object { $_ } | Select-Object -Unique) {
+    if (Test-Path $candidate -PathType Leaf) { return (Resolve-Path $candidate).Path }
+  }
+  return $null
+}
+
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stagingDirectory = Join-Path $env:TEMP "ArkTSDevEco-diagnostics-$timestamp-$PID"
 $archive = Join-Path $OutputDirectory "ArkTSDevEco-diagnostics-$timestamp.zip"
@@ -22,8 +51,7 @@ try {
 
   $nodeVersion = try { (& node --version 2>&1 | Out-String).Trim() } catch { "unavailable" }
   $npmVersion = try { (& npm --version 2>&1 | Out-String).Trim() } catch { "unavailable" }
-  $devecocliCommand = Get-Command @("devecocli.cmd", "devecocli.exe", "devecocli") -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  $devecocliPath = if ($devecocliCommand) { $devecocliCommand.Source } else { $null }
+  $devecocliPath = Resolve-DevEcoCli
   $devecocliVersion = if ($devecocliPath) { try { (& $devecocliPath --version 2>&1 | Out-String).Trim() } catch { "unavailable" } } else { "unavailable" }
   $lspHelpAvailable = if ($devecocliPath) {
     try {

@@ -60,7 +60,7 @@ Zed 官方的 Windows 版本要求和故障排查见 [Zed on Windows](https://ze
 
 ## 启用构建与运行
 
-构建任务依赖华为官方 DevEco CLI。请先安装 Node.js 和 DevEco CLI，并确保 `node` 和 `devecocli` 位于全局 `PATH`：
+构建任务依赖华为官方 DevEco CLI。请先安装 Node.js 和 DevEco CLI：
 
 ```sh
 node --version
@@ -70,7 +70,7 @@ devecocli --version
 
 安装器不会比较 Node.js、DevEco Studio 或 Command Line Tools 的版本。若现有工具链与 DevEco CLI 或具体项目不兼容，构建命令会在执行时报告实际错误。
 
-打开工程后，运行命令面板中的 `task: spawn`，即可看到：
+打开工程后，按 `Ctrl+Shift+P` 打开 **Zed 命令面板**，搜索并运行 `task: spawn`，即可看到下列任务。`spawn` 不是 Windows 终端命令，不要在 PowerShell 或 CMD 中输入它：
 
 | Zed 任务 | DevEco CLI 命令 | 用途 |
 |---|---|---|
@@ -83,7 +83,7 @@ devecocli --version
 | `ArkTS: List Devices` | `devecocli device list` | 查看真机和模拟器 |
 | `ArkTS: Device Logs` | `devecocli log` | 持续查看设备日志 |
 
-任务在 Zed 集成终端中运行并继承全局 Shell 环境、Node、npm 配置和 `.npmrc`。如果没有安装 DevEco CLI，编辑、补全和跳转仍然可用，但这些任务会提示找不到 `devecocli`。
+任务在 Zed 集成终端中运行并继承全局 Shell 环境、Node、npm 配置和 `.npmrc`。Windows 上即使 Zed GUI 没有继承最新 PATH，包装器也会继续检查系统/用户 PATH、`%APPDATA%\npm`、`npm config get prefix` 以及安装器保存的检测结果。如果没有安装 DevEco CLI，编辑、补全和跳转仍然可用，但这些任务会提示找不到 `devecocli`。
 
 `Build and Run` 需要可用的调试签名和已连接设备；如果项目尚未配置签名，可先按照 DevEco CLI 文档运行 `devecocli signature generate`。
 
@@ -135,7 +135,7 @@ Linux: ~/.config/zed/settings.json
 
 ### Node 与 Language Server 选择
 
-扩展从项目 Shell 的 `PATH` 查找 `devecocli`。找到后，默认启动：
+扩展优先从项目 Shell 的 `PATH` 查找 `devecocli`；Windows 上还会检查安装器检测结果和 `%APPDATA%\npm\devecocli.cmd`。找到后，默认启动：
 
 ```text
 devecocli serve lsp --arkts --project-path <Zed 工程根目录>
@@ -212,13 +212,13 @@ cargo build --release --target wasm32-wasip2
 在 macOS / Linux 生成可移植扩展包：
 
 ```sh
-./scripts/package-extension.sh 0.4.0
+./scripts/package-extension.sh 0.4.1
 ```
 
 在 Windows 安装 Rust 与 [NSIS](https://nsis.sourceforge.io/) 后生成 EXE：
 
 ```powershell
-./scripts/package-windows.ps1 -Version 0.4.0
+./scripts/package-windows.ps1 -Version 0.4.1
 ```
 
 推送 `v*` 标签会触发公开的 GitHub Actions Release 工作流，构建、静默安装/卸载冒烟测试并发布 EXE、扩展压缩包和 SHA-256 校验文件。
