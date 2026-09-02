@@ -29,3 +29,10 @@ jobs:
           if git grep -n -E '/Users/[^/]+|[A-Z]:\\Users\\' -- . ':(exclude).github/workflows/ci.yml'; then
             exit 1
           fi
+  windows-integration:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify extension registration, tasks, and command diagnostics
+        shell: pwsh
+        run: ./scripts/test-windows-integration.ps1

@@ -6,10 +6,21 @@ use zed_extension_api as zed;
 
 const PACKAGE_NAME: &str = "@arkts/language-server";
 const PACKAGE_VERSION: &str = "1.3.10";
+const PRODUCT_VERSION: &str = "0.4.0";
 const SERVER_MODULE: &str = "node_modules/@arkts/language-server/out/index.mjs";
 const PROXY_FILE: &str = "ets-language-server.mjs";
 const PROXY_SOURCE: &str = include_str!("../assets/ets-language-server.mjs");
 const DIAGNOSTIC_SERVER_SOURCE: &[u8] = include_bytes!("../assets/diagnostic-language-server.mjs");
+
+fn official_lsp_arguments(project_root: String) -> Vec<String> {
+    vec![
+        "serve".to_string(),
+        "lsp".to_string(),
+        "--arkts".to_string(),
+        "--project-path".to_string(),
+        project_root,
+    ]
+}
 
 struct ArkTsDevEcoExtension {
     cached_proxy_path: Option<String>,
@@ -88,6 +99,53 @@ impl ArkTsDevEcoExtension {
         self.cached_proxy_path = Some(path.clone());
         Ok(path)
     }
+
+    fn server_module_path() -> Result<String, String> {
+        Ok(env::current_dir()
+            .map_err(|error| format!("failed to locate extension work directory: {error}"))?
+            .join(SERVER_MODULE)
+            .to_string_lossy()
+            .into_owned())
+    }
+
+    fn proxy_command(
+        &mut self,
+        worktree: &Worktree,
+        backend_kind: &str,
+        backend_command: &str,
+        backend_args: Vec<String>,
+    ) -> Result<zed::Command, String> {
+        let proxy = self.proxy_path()?;
+        let node = match worktree.which("node") {
+            Some(node) => node,
+            None => zed::node_binary_path()?,
+        };
+        let mut environment = worktree.shell_env();
+        environment.push((
+            "ARKTS_LSP_BACKEND_KIND".to_string(),
+            backend_kind.to_string(),
+        ));
+        environment.push((
+            "ARKTS_LSP_BACKEND_COMMAND".to_string(),
+            backend_command.to_string(),
+        ));
+        environment.push((
+            "ARKTS_LSP_BACKEND_ARGS_JSON".to_string(),
+            zed::serde_json::to_string(&backend_args)
+                .map_err(|error| format!("failed to encode ArkTS LSP arguments: {error}"))?,
+        ));
+        environment.push(("ARKTS_LSP_BACKEND_CWD".to_string(), worktree.root_path()));
+        environment.push((
+            "ARKTS_LSP_DIAGNOSTIC_BUILD".to_string(),
+            PRODUCT_VERSION.to_string(),
+        ));
+
+        Ok(zed::Command {
+            command: node,
+            args: vec![proxy, "--stdio".to_string()],
+            env: environment,
+        })
+    }
 }
 
 impl zed::Extension for ArkTsDevEcoExtension {
@@ -114,18 +172,22 @@ impl zed::Extension for ArkTsDevEcoExtension {
             }
         }
 
-        self.ensure_language_server(language_server_id)?;
-        let proxy = self.proxy_path()?;
-        let node = match worktree.which("node") {
-            Some(node) => node,
-            None => zed::node_binary_path()?,
-        };
+        if let Some(devecocli) = worktree.which("devecocli") {
+            return self.proxy_command(
+                worktree,
+                "official-devecocli",
+                &devecocli,
+                official_lsp_arguments(worktree.root_path()),
+            );
+        }
 
-        Ok(zed::Command {
-            command: node,
-            args: vec![proxy, "--stdio".to_string()],
-            env: Vec::new(),
-        })
+        self.ensure_language_server(language_server_id)?;
+        self.proxy_command(
+            worktree,
+            "community-fallback",
+            &zed::node_binary_path()?,
+            vec![Self::server_module_path()?, "--stdio".to_string()],
+        )
     }
 
     fn language_server_initialization_options(
@@ -145,7 +207,21 @@ zed::register_extension!(ArkTsDevEcoExtension);
 
 #[cfg(test)]
 mod tests {
-    use super::{with_semantic_tokens_default, zed};
+    use super::{official_lsp_arguments, with_semantic_tokens_default, zed};
+
+    #[test]
+    fn uses_the_official_deveco_cli_lsp_entrypoint() {
+        assert_eq!(
+            official_lsp_arguments("C:\\work\\HarmonyApp".to_string()),
+            [
+                "serve",
+                "lsp",
+                "--arkts",
+                "--project-path",
+                "C:\\work\\HarmonyApp"
+            ]
+        );
+    }
 
     #[test]
     fn disables_semantic_tokens_by_default() {

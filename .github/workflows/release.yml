@@ -6,7 +6,7 @@ on:
       version:
         description: Release version without the v prefix
         required: true
-        default: 0.3.5
+        default: 0.4.0
   push:
     tags:
       - "v*"
@@ -98,15 +98,65 @@ jobs:
           $sourceTasks = (Resolve-Path "./languages/arkts/tasks.json").Path
           $stateDirectory = Join-Path $env:RUNNER_TEMP "arkts-task-state"
           $tasksFile = Join-Path $env:RUNNER_TEMP "zed-tasks.json"
+          $commandWrapper = Join-Path $env:RUNNER_TEMP "deveco-command.cmd"
+          [IO.File]::WriteAllText($commandWrapper, "@echo off`r`n", [Text.Encoding]::ASCII)
           $originalTasks = "// Preserve this comment`r`n[`r`n  {`r`n    `"label`": `"Existing Task`",`r`n    `"command`": `"echo existing`"`r`n  },`r`n]`r`n"
           [IO.File]::WriteAllText($tasksFile, $originalTasks, [Text.UTF8Encoding]::new($false))
-          & $powershell -NoProfile -ExecutionPolicy Bypass -File $script -Mode Install -StateDir $stateDirectory -SourceTasks $sourceTasks -TasksFile $tasksFile
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $script -Mode Install -StateDir $stateDirectory -SourceTasks $sourceTasks -CommandWrapper $commandWrapper -TasksFile $tasksFile
           if ($LASTEXITCODE -ne 0) { throw "Task registration failed with exit code $LASTEXITCODE" }
           if (-not (Test-Path (Join-Path $stateDirectory "tasks.arkts-deveco.sha256"))) { throw "Task registration did not save its state hash" }
           if ([IO.File]::ReadAllText($tasksFile) -notmatch 'ArkTS: Build Debug') { throw "Task registration did not add ArkTS tasks" }
+          $escapedWrapper = $commandWrapper.Replace("\", "\\")
+          if (-not [IO.File]::ReadAllText($tasksFile).Contains($escapedWrapper)) { throw "Task registration did not wire tasks through the diagnostic wrapper" }
           & $powershell -NoProfile -ExecutionPolicy Bypass -File $script -Mode Uninstall -StateDir $stateDirectory -TasksFile $tasksFile
           if ($LASTEXITCODE -ne 0) { throw "Task unregistration failed with exit code $LASTEXITCODE" }
           if ([IO.File]::ReadAllText($tasksFile) -cne $originalTasks) { throw "Task unregistration did not restore the original file" }
+      - name: Validate Zed extension registration and command diagnostics
+        shell: pwsh
+        run: |
+          $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          $registration = (Resolve-Path "./installer/windows/extension-registration.ps1").Path
+          $commandScript = (Resolve-Path "./installer/windows/deveco-command.ps1").Path
+          $testRoot = Join-Path $env:RUNNER_TEMP "arkts-real-integration"
+          $stateDirectory = Join-Path $testRoot "state"
+          $extensionDirectory = Join-Path $testRoot "extensions\installed\arkts"
+          $indexFile = Join-Path $testRoot "extensions\index.json"
+          New-Item $extensionDirectory -ItemType Directory -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $extensionDirectory "extension.toml"), "id = `"arkts`"`nrepository = `"https://example.invalid/original`"`n", [Text.UTF8Encoding]::new($false))
+          $originalIndex = @{
+            extensions = @{ arkts = @{ manifest = @{ id = "arkts"; repository = "https://example.invalid/original" }; dev = $false } }
+            themes = @{}
+            icon_themes = @{}
+            languages = @{ ArkTS = @{ extension = "arkts"; path = "languages/arkts"; matcher = @{ path_suffixes = @("ets") }; hidden = $false; grammar = "arkts" } }
+          } | ConvertTo-Json -Depth 20
+          [IO.File]::WriteAllText($indexFile, $originalIndex, [Text.UTF8Encoding]::new($false))
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $registration -Mode Prepare -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+          if ($LASTEXITCODE -ne 0) { throw "Extension registration prepare failed" }
+          Remove-Item $extensionDirectory -Recurse -Force
+          New-Item $extensionDirectory -ItemType Directory -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $extensionDirectory "extension.toml"), "id = `"arkts`"`nrepository = `"https://github.com/liuhui-code/zed-arkts-deveco`"`n", [Text.UTF8Encoding]::new($false))
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $registration -Mode Install -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile -Version "0.4.0"
+          if ($LASTEXITCODE -ne 0) { throw "Extension registration failed" }
+          $registered = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
+          if ($registered.extensions.arkts.manifest.version -ne "0.4.0") { throw "Packaged extension version was not registered" }
+          if ($registered.extensions.arkts.manifest.repository -ne "https://github.com/liuhui-code/zed-arkts-deveco") { throw "Packaged extension repository was not registered" }
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $registration -Mode Uninstall -StateDir $stateDirectory -ExtensionDir $extensionDirectory -IndexFile $indexFile
+          if ($LASTEXITCODE -ne 0) { throw "Extension unregistration failed" }
+          $restored = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
+          if ($restored.extensions.arkts.manifest.repository -ne "https://example.invalid/original") { throw "Previous ArkTS extension index entry was not restored" }
+          if ([IO.File]::ReadAllText((Join-Path $extensionDirectory "extension.toml")) -notmatch 'example.invalid/original') { throw "Previous ArkTS extension directory was not restored" }
+
+          $fakeBin = Join-Path $testRoot "bin"
+          New-Item $fakeBin -ItemType Directory -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $fakeBin "node.cmd"), "@echo off`r`necho v22.0.0`r`n", [Text.Encoding]::ASCII)
+          [IO.File]::WriteAllText((Join-Path $fakeBin "devecocli.cmd"), "@echo off`r`necho fake-devecocli %*`r`n", [Text.Encoding]::ASCII)
+          $env:Path = "$fakeBin;$env:Path"
+          $env:LOCALAPPDATA = Join-Path $testRoot "local-app-data"
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File $commandScript build --build-mode debug
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic command wrapper did not preserve the CLI exit code" }
+          $summaryFile = Get-Item (Join-Path $env:LOCALAPPDATA "ArkTSDevEco\logs\command-summary-*.json")
+          $summary = [IO.File]::ReadAllText($summaryFile.FullName) | ConvertFrom-Json
+          if ($summary.status -ne "succeeded" -or ($summary.arguments -join ' ') -ne "build --build-mode debug") { throw "Command summary did not record the executed build" }
       - name: Build extension and Windows installer
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Version "${{ steps.version.outputs.value }}"
@@ -129,13 +179,15 @@ jobs:
           [IO.File]::WriteAllText($globalTasks, $originalTasks, [Text.UTF8Encoding]::new($false))
           $install = Start-Process $installer.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
-          $manifest = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.toml"
-          $wasm = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\extension.wasm"
-          $grammar = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts-deveco\grammars\arkts.wasm"
+          $manifest = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts\extension.toml"
+          $wasm = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts\extension.wasm"
+          $grammar = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\arkts\grammars\arkts.wasm"
           $taskInstaller = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\task-registration.ps1"
+          $extensionRegistration = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\extension-registration.ps1"
+          $commandWrapper = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\deveco-command.cmd"
           $diagnosticsCollector = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\collect-diagnostics.ps1"
           $thirdPartyNotices = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\THIRD_PARTY_NOTICES.md"
-          foreach ($path in @($manifest, $wasm, $grammar, $taskInstaller, $diagnosticsCollector, $thirdPartyNotices, $globalTasks)) {
+          foreach ($path in @($manifest, $wasm, $grammar, $taskInstaller, $extensionRegistration, $commandWrapper, $diagnosticsCollector, $thirdPartyNotices, $globalTasks)) {
             if (-not (Test-Path $path)) { throw "Missing installed file: $path" }
           }
           $diagnosticLogs = Join-Path $env:LOCALAPPDATA "ArkTSDevEco\logs"
@@ -147,12 +199,14 @@ jobs:
           $diagnosticsArchive = Get-Item (Join-Path $diagnosticsOutput "ArkTSDevEco-diagnostics-*.zip")
           $diagnosticsExpanded = Join-Path $env:RUNNER_TEMP "diagnostics-expanded"
           Expand-Archive $diagnosticsArchive.FullName $diagnosticsExpanded
+          if (-not (Test-Path (Join-Path $diagnosticsExpanded "REPORT.txt"))) { throw "Diagnostics archive did not contain the human-readable report" }
           if (-not (Test-Path (Join-Path $diagnosticsExpanded "logs\proxy-ci.jsonl"))) {
             throw "Diagnostics archive did not contain the language-server logs"
           }
           $registeredTasks = [IO.File]::ReadAllText($globalTasks)
           foreach ($label in @(
             "Existing Task",
+            "ArkTS: Verify DevEco CLI",
             "ArkTS: Build Debug",
             "ArkTS: Build Release",
             "ArkTS: Build and Run",
@@ -165,6 +219,16 @@ jobs:
             if ($registeredTasks -notmatch $pattern) {
               throw "Global task was not preserved or registered: $label"
             }
+          }
+          $indexFile = Join-Path $env:LOCALAPPDATA "Zed\extensions\index.json"
+          $extensionIndex = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
+          if ($extensionIndex.extensions.arkts.manifest.repository -ne "https://github.com/liuhui-code/zed-arkts-deveco") {
+            throw "Installer copied extension files but did not register the extension in Zed"
+          }
+          $debugTaskPattern = '"label"\s*:\s*"ArkTS: Build Debug"[\s\S]*?"command"\s*:\s*"([^\"]+)"'
+          $debugTask = [regex]::Match($registeredTasks, $debugTaskPattern)
+          if (-not $debugTask.Success -or $debugTask.Groups[1].Value -notmatch 'deveco-command\.cmd') {
+            throw "Installed build task bypasses the diagnostic command wrapper"
           }
           $stateDirectory = Join-Path $env:LOCALAPPDATA "ArkTSDevEco"
           $backupTasks = Join-Path $stateDirectory "tasks.before-arkts-deveco.json"
@@ -181,6 +245,10 @@ jobs:
           $restoredTasks = [IO.File]::ReadAllText($globalTasks)
           if ($restoredTasks -cne $originalTasks) {
             throw "Uninstaller did not restore the original Zed tasks file (expected length $($originalTasks.Length), actual length $($restoredTasks.Length))"
+          }
+          $indexAfterUninstall = [IO.File]::ReadAllText($indexFile) | ConvertFrom-Json
+          if ($indexAfterUninstall.extensions.arkts.manifest.repository -eq "https://github.com/liuhui-code/zed-arkts-deveco") {
+            throw "Uninstaller left the packaged extension registered"
           }
       - name: Create SHA-256 checksums
         shell: pwsh

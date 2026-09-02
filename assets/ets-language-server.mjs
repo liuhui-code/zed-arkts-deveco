@@ -1,5 +1,5 @@
 // Compatibility, SDK-discovery, and diagnostics proxy for the bundled ArkTS language server.
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { delimiter, join, resolve } from 'node:path'
@@ -7,16 +7,21 @@ import process from 'node:process'
 import { execFile, spawn } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 
-const serverPath = process.env.ARKTS_LSP_SERVER_PATH
+const fallbackServerPath = process.env.ARKTS_LSP_SERVER_PATH
   ? resolve(process.env.ARKTS_LSP_SERVER_PATH)
   : fileURLToPath(new URL('./node_modules/@arkts/language-server/out/index.mjs', import.meta.url))
 const defaultHeapLimitMb = 4096
-const diagnosticBuild = 'zed-arkts-deveco-0.3.4'
+const diagnosticBuild = process.env.ARKTS_LSP_DIAGNOSTIC_BUILD ?? '0.4.0'
 const diagnosticsEnabled = process.env.ARKTS_LSP_DIAGNOSTICS !== '0'
 const memoryIntervalMs = Math.max(100, Number(process.env.ARKTS_LSP_MEMORY_INTERVAL_MS) || 5_000)
 const sessionId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+const sessionStartedAtMs = Date.now()
 let sequence = 0
 let peakChildRssMiB = 0
+let peakProcessTreeRssMiB = 0
+let stderrTail = ''
+let stdoutTail = ''
+let initialized = false
 
 function diagnosticDirectory() {
   if (process.env.ARKTS_LSP_LOG_DIR) return resolve(process.env.ARKTS_LSP_LOG_DIR)
@@ -28,6 +33,19 @@ function diagnosticDirectory() {
 const logDirectory = diagnosticDirectory()
 const logFile = join(logDirectory, `proxy-${sessionId}.jsonl`)
 const stderrFile = join(logDirectory, `language-server-${sessionId}.stderr.log`)
+const stdoutFile = join(logDirectory, `language-server-${sessionId}.stdout.log`)
+const summaryFile = join(logDirectory, `session-summary-${sessionId}.json`)
+const requestCounts = {}
+const slowestRequests = []
+
+function parseBackendArguments() {
+  if (!process.env.ARKTS_LSP_BACKEND_ARGS_JSON) return undefined
+  try {
+    const value = JSON.parse(process.env.ARKTS_LSP_BACKEND_ARGS_JSON)
+    if (Array.isArray(value) && value.every(argument => typeof argument === 'string')) return value
+  } catch {}
+  return undefined
+}
 
 function log(event, data = {}) {
   if (!diagnosticsEnabled) return
@@ -46,6 +64,71 @@ function log(event, data = {}) {
   }
 }
 
+const sessionSummary = {
+  schemaVersion: 2,
+  sessionId,
+  diagnosticBuild,
+  startedAt: new Date().toISOString(),
+  status: 'starting',
+  selectedBackend: process.env.ARKTS_LSP_BACKEND_KIND ?? 'community-fallback',
+  backendCommand: process.env.ARKTS_LSP_BACKEND_COMMAND ?? process.execPath,
+  backendArguments: parseBackendArguments(),
+  backendCwd: process.env.ARKTS_LSP_BACKEND_CWD ?? process.cwd(),
+  proxyPid: process.pid,
+  proxyLog: logFile,
+  backendStderr: stderrFile,
+  backendStdout: stdoutFile,
+  initialized: false,
+  requestCounts,
+  slowestRequests,
+}
+
+function updateSummary(update = {}) {
+  if (!diagnosticsEnabled) return
+  Object.assign(sessionSummary, update)
+  try {
+    mkdirSync(logDirectory, { recursive: true })
+    writeFileSync(summaryFile, `${JSON.stringify(sessionSummary, null, 2)}\n`)
+  } catch {}
+}
+
+function newestDevEcoFailureReport() {
+  if (backendKind !== 'official-devecocli') return undefined
+  const roots = process.platform === 'win32'
+    ? [join(process.env.LOCALAPPDATA ?? join(os.homedir(), 'AppData', 'Local'), 'devecocli-mcp-server', 'logs', 'lsp-server')]
+    : process.platform === 'darwin'
+      ? [join(os.homedir(), 'Library', 'Logs', 'devecocli-mcp-server', 'lsp-server')]
+      : [join(os.homedir(), '.local', 'share', 'devecocli-mcp-server', 'logs', 'lsp-server')]
+  let newest
+  const visit = (directory, depth) => {
+    if (depth > 4 || !existsSync(directory)) return
+    let names
+    try { names = readdirSync(directory) } catch { return }
+    for (const name of names) {
+      const path = join(directory, name)
+      let stat
+      try { stat = statSync(path) } catch { continue }
+      if (stat.isDirectory()) visit(path, depth + 1)
+      else if (name.startsWith('nodejs_error_') && name.endsWith('.txt') && stat.mtimeMs >= sessionStartedAtMs - 2_000) {
+        if (!newest || stat.mtimeMs > newest.mtimeMs) newest = { path, mtimeMs: stat.mtimeMs }
+      }
+    }
+  }
+  for (const root of roots) visit(root, 0)
+  if (!newest) return undefined
+  try {
+    const report = JSON.parse(readFileSync(newest.path, 'utf8'))
+    return {
+      path: newest.path,
+      message: report?.javascriptStack?.message,
+      code: report?.javascriptStack?.errorProperties?.code,
+      commandLine: report?.header?.commandLine,
+    }
+  } catch {
+    return { path: newest.path, message: 'DevEco CLI generated a Node failure report that could not be parsed.' }
+  }
+}
+
 function heapLimitMb() {
   const configured = process.env.ARKTS_LSP_MAX_OLD_SPACE_SIZE_MB
   if (configured === undefined || configured === '') return defaultHeapLimitMb
@@ -60,10 +143,17 @@ function serverArguments() {
     .test(process.env.NODE_OPTIONS ?? '')
   return [
     ...(limit > 0 && !hasNodeOptionsLimit ? [`--max-old-space-size=${limit}`] : []),
-    serverPath,
+    fallbackServerPath,
     '--stdio',
   ]
 }
+
+const backendKind = sessionSummary.selectedBackend
+const backendCommand = sessionSummary.backendCommand
+const backendArguments = sessionSummary.backendArguments ?? serverArguments()
+const backendCwd = sessionSummary.backendCwd
+const backendUsesShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(backendCommand)
+sessionSummary.backendArguments = backendArguments
 
 function firstExisting(paths) {
   return paths.filter(Boolean).find(path => existsSync(path))
@@ -167,9 +257,8 @@ function writeMessage(stream, message) {
   stream.write(body)
 }
 
-const arguments_ = serverArguments()
-const child = spawn(process.execPath, arguments_, {
-  cwd: process.cwd(),
+const child = spawn(backendCommand, backendArguments, {
+  cwd: backendCwd,
   env: {
     ...process.env,
     ARKTS_LSP_DIAGNOSTICS: diagnosticsEnabled ? '1' : '0',
@@ -177,13 +266,18 @@ const child = spawn(process.execPath, arguments_, {
     ARKTS_LSP_LOG_DIR: logDirectory,
     PATH: process.env.PATH?.split(delimiter).join(delimiter),
   },
+  shell: backendUsesShell,
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 
 log('proxy-start', {
   childPid: child.pid,
-  serverPath,
-  node: process.execPath,
+  selectedBackend: backendKind,
+  backendCommand,
+  backendArguments,
+  backendCwd,
+  backendUsesShell,
+  proxyNode: process.execPath,
   nodeVersion: process.version,
   platform: process.platform,
   arch: process.arch,
@@ -191,7 +285,9 @@ log('proxy-start', {
   diagnosticBuild,
   nodeOptions: process.env.NODE_OPTIONS,
   logDirectory,
+  summaryFile,
 })
+updateSummary({ childPid: child.pid, status: 'spawned', backendUsesShell })
 
 const pendingRequests = new Map()
 const parseServerOutput = createFrameParser((message) => {
@@ -201,17 +297,38 @@ const parseServerOutput = createFrameParser((message) => {
     pendingRequests.delete(String(message.id))
     summary.requestMethod = request.method
     summary.durationMs = Math.round(performance.now() - request.startedAt)
+    requestCounts[request.method] = (requestCounts[request.method] ?? 0) + 1
+    slowestRequests.push({ method: request.method, durationMs: summary.durationMs })
+    slowestRequests.sort((left, right) => right.durationMs - left.durationMs)
+    slowestRequests.splice(10)
+    if (request.method === 'initialize' && !message.error) {
+      initialized = true
+      updateSummary({ status: 'initialized', initialized: true, initializedAt: new Date().toISOString() })
+    } else {
+      updateSummary({ requestCounts, slowestRequests })
+    }
   }
   log('lsp-message', summary)
 })
 
-child.stdout.on('data', parseServerOutput)
+child.stdout.on('data', chunk => {
+  stdoutTail = `${stdoutTail}${chunk.toString('utf8')}`.slice(-8_000)
+  try {
+    mkdirSync(logDirectory, { recursive: true })
+    appendFileSync(stdoutFile, chunk)
+  } catch {}
+  parseServerOutput(chunk)
+})
 child.stdout.pipe(process.stdout)
 child.stderr.on('data', (chunk) => {
+  const text = chunk.toString('utf8')
+  stderrTail = `${stderrTail}${text}`.slice(-8_000)
   try {
     mkdirSync(logDirectory, { recursive: true })
     appendFileSync(stderrFile, chunk)
   } catch {}
+  log('backend-stderr', { bytes: chunk.length, preview: text.slice(-1_000) })
+  updateSummary({ stderrTail })
 })
 child.stderr.pipe(process.stderr)
 
@@ -219,6 +336,32 @@ function recordChildRss(bytes) {
   const rssMiB = Math.round(bytes / 1024 / 1024)
   peakChildRssMiB = Math.max(peakChildRssMiB, rssMiB)
   log('child-memory', { childPid: child.pid, rssMiB, peakRssMiB: peakChildRssMiB })
+  peakProcessTreeRssMiB = Math.max(peakProcessTreeRssMiB, rssMiB)
+  updateSummary({ childRssMiB: rssMiB, peakChildRssMiB, peakProcessTreeRssMiB })
+}
+
+function recordProcessTree(snapshot) {
+  const processes = Array.isArray(snapshot?.processes) ? snapshot.processes : []
+  const totalRssMiB = Math.round(Number(snapshot?.totalRssBytes ?? 0) / 1024 / 1024)
+  if (!Number.isFinite(totalRssMiB)) return
+  peakProcessTreeRssMiB = Math.max(peakProcessTreeRssMiB, totalRssMiB)
+  const topProcesses = processes
+    .map(item => ({
+      pid: Number(item.pid),
+      parentPid: Number(item.parentPid),
+      name: item.name,
+      rssMiB: Math.round(Number(item.rssBytes ?? 0) / 1024 / 1024),
+    }))
+    .sort((left, right) => right.rssMiB - left.rssMiB)
+    .slice(0, 10)
+  log('process-tree-memory', {
+    rootPid: child.pid,
+    processCount: processes.length,
+    totalRssMiB,
+    peakRssMiB: peakProcessTreeRssMiB,
+    topProcesses,
+  })
+  updateSummary({ processTreeRssMiB: totalRssMiB, peakProcessTreeRssMiB, topProcesses })
 }
 
 function sampleChildMemory() {
@@ -233,11 +376,31 @@ function sampleChildMemory() {
   }
 
   if (process.platform === 'win32') {
-    const script = `(Get-Process -Id ${child.pid} -ErrorAction Stop).WorkingSet64`
+    const script = [
+      `$rootPid = ${child.pid}`,
+      '$all = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name)',
+      '$ids = [Collections.Generic.HashSet[uint32]]::new()',
+      '[void]$ids.Add([uint32]$rootPid)',
+      'do {',
+      '  $before = $ids.Count',
+      '  foreach ($item in $all) { if ($ids.Contains([uint32]$item.ParentProcessId)) { [void]$ids.Add([uint32]$item.ProcessId) } }',
+      '} while ($ids.Count -ne $before)',
+      '$items = foreach ($item in $all) {',
+      '  if ($ids.Contains([uint32]$item.ProcessId)) {',
+      '    $process = Get-Process -Id $item.ProcessId -ErrorAction SilentlyContinue',
+      '    if ($process) { [pscustomobject]@{ pid = $item.ProcessId; parentPid = $item.ParentProcessId; name = $item.Name; rssBytes = $process.WorkingSet64 } }',
+      '  }',
+      '}',
+      '[pscustomobject]@{ totalRssBytes = (($items | Measure-Object rssBytes -Sum).Sum); processes = @($items) } | ConvertTo-Json -Depth 4 -Compress',
+    ].join('; ')
     try {
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 4_000 }, (error, stdout) => {
-        const bytes = Number(stdout.trim())
-        if (!error && Number.isFinite(bytes)) recordChildRss(bytes)
+        if (error) return
+        try {
+          recordProcessTree(JSON.parse(stdout.trim()))
+        } catch (parseError) {
+          log('child-memory-error', { message: `invalid process tree response: ${parseError}` })
+        }
       })
     } catch (error) {
       log('child-memory-error', { message: error instanceof Error ? error.message : String(error) })
@@ -266,7 +429,14 @@ function stop(code = 0) {
   if (closing) return
   closing = true
   clearInterval(memoryTimer)
-  log('proxy-stop', { code, childPid: child.pid, peakChildRssMiB })
+  log('proxy-stop', { code, childPid: child.pid, peakChildRssMiB, peakProcessTreeRssMiB })
+  updateSummary({
+    status: 'stopping',
+    proxyExitCode: code,
+    stoppedAt: new Date().toISOString(),
+    peakChildRssMiB,
+    peakProcessTreeRssMiB,
+  })
   child.kill()
   setTimeout(() => process.exit(code), 100).unref()
 }
@@ -296,6 +466,14 @@ process.stdin.on('data', (chunk) => {
 
     const forwarded = addSdkDefaults(message)
     log('lsp-message', messageSummary(forwarded, 'client-to-server'))
+    if (forwarded?.method === 'initialize') {
+      updateSummary({
+        status: 'initializing',
+        rootUri: forwarded.params?.rootUri,
+        workspaceFolders: forwarded.params?.workspaceFolders,
+        clientInfo: forwarded.params?.clientInfo,
+      })
+    }
     if (forwarded?.method && forwarded.id !== undefined) {
       pendingRequests.set(String(forwarded.id), { method: forwarded.method, startedAt: performance.now() })
     }
@@ -314,9 +492,32 @@ process.stdin.on('end', () => stop(0))
 process.on('SIGINT', () => stop(130))
 process.on('SIGTERM', () => stop(143))
 
-child.on('error', error => log('child-error', { name: error.name, message: error.message, stack: error.stack }))
+child.on('error', error => {
+  log('child-error', { name: error.name, message: error.message, stack: error.stack })
+  updateSummary({
+    status: 'spawn-error',
+    error: { name: error.name, message: error.message, stack: error.stack },
+    stderrTail,
+    ...(!initialized ? { stdoutTail } : {}),
+  })
+})
 child.on('exit', (code, signal) => {
   clearInterval(memoryTimer)
-  log('child-exit', { code, signal, childPid: child.pid, peakChildRssMiB })
+  const status = initialized && (code === 0 || closing) ? 'stopped' : 'failed'
+  const devecoFailure = !initialized ? newestDevEcoFailureReport() : undefined
+  if (devecoFailure) log('devecocli-failure-report', devecoFailure)
+  log('child-exit', { code, signal, childPid: child.pid, peakChildRssMiB, peakProcessTreeRssMiB, initialized })
+  updateSummary({
+    status,
+    initialized,
+    backendExitCode: code,
+    backendExitSignal: signal,
+    backendExitedAt: new Date().toISOString(),
+    peakChildRssMiB,
+    peakProcessTreeRssMiB,
+    stderrTail,
+    ...(!initialized ? { stdoutTail } : {}),
+    ...(devecoFailure ? { devecoFailure } : {}),
+  })
   if (!closing) process.exit(code ?? (signal ? 1 : 0))
 })

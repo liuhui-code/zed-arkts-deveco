@@ -25,14 +25,28 @@ UninstPage instfiles
 Section "Install"
   SetShellVarContext current
 
-  SetOutPath "$LOCALAPPDATA\Zed\extensions\installed\arkts-deveco"
+  CreateDirectory "$INSTDIR"
+  SetOutPath "$PLUGINSDIR"
+  File /oname=extension-registration.ps1 "extension-registration.ps1"
+  ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\extension-registration.ps1" -Mode Prepare -StateDir "$INSTDIR" -Version "${VERSION}"' $5
+  StrCmp $5 0 extension_prepared
+    Abort "无法备份和注册 ArkTS 扩展，安装已停止。"
+  extension_prepared:
+
+  RMDir /r "$LOCALAPPDATA\Zed\extensions\installed\arkts"
+  SetOutPath "$LOCALAPPDATA\Zed\extensions\installed\arkts"
   File /r "${STAGE_DIR}\*"
+  RMDir /r "$LOCALAPPDATA\Zed\extensions\installed\arkts-deveco"
+  RMDir /r "$LOCALAPPDATA\Zed\extensions\work\arkts-deveco"
 
   SetOutPath "$INSTDIR"
   File "..\..\LICENSE"
   File "..\..\THIRD_PARTY_NOTICES.md"
   File "environment-check.ps1"
   File "task-registration.ps1"
+  File "extension-registration.ps1"
+  File "deveco-command.ps1"
+  File "deveco-command.cmd"
   File "collect-diagnostics.ps1"
   File "collect-diagnostics.cmd"
   File /oname=arkts-tasks.json "..\..\languages\arkts\tasks.json"
@@ -47,7 +61,12 @@ Section "Install"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ArkTSDevEcoZed" "NoRepair" 1
 
-  ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\task-registration.ps1" -Mode Install -StateDir "$INSTDIR" -SourceTasks "$INSTDIR\arkts-tasks.json"' $4
+  ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\extension-registration.ps1" -Mode Install -StateDir "$INSTDIR" -Version "${VERSION}"' $5
+  StrCmp $5 0 extension_registered
+    Abort "ArkTS 扩展文件已复制，但 Zed 扩展索引注册失败；安装已停止。"
+  extension_registered:
+
+  ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\task-registration.ps1" -Mode Install -StateDir "$INSTDIR" -SourceTasks "$INSTDIR\arkts-tasks.json" -CommandWrapper "$INSTDIR\deveco-command.cmd"' $4
   StrCmp $4 0 tasks_registered
     IfSilent tasks_registered 0
     MessageBox MB_OK|MB_ICONEXCLAMATION "无法把 ArkTS 构建任务注册到 Zed 全局任务文件；为保护已有配置，安装器没有覆盖该文件。打开 .ets 文件后仍可使用扩展自带的语言任务。"
@@ -86,12 +105,18 @@ Section "Uninstall"
   IfFileExists "$INSTDIR\task-registration.ps1" 0 tasks_unregistered
     ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\task-registration.ps1" -Mode Uninstall -StateDir "$INSTDIR"' $4
   tasks_unregistered:
+  IfFileExists "$INSTDIR\extension-registration.ps1" 0 extension_unregistered
+    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\extension-registration.ps1" -Mode Uninstall -StateDir "$INSTDIR"' $5
+  extension_unregistered:
   RMDir /r "$LOCALAPPDATA\Zed\extensions\installed\arkts-deveco"
   RMDir /r "$LOCALAPPDATA\Zed\extensions\work\arkts-deveco"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\THIRD_PARTY_NOTICES.md"
   Delete "$INSTDIR\environment-check.ps1"
   Delete "$INSTDIR\task-registration.ps1"
+  Delete "$INSTDIR\extension-registration.ps1"
+  Delete "$INSTDIR\deveco-command.ps1"
+  Delete "$INSTDIR\deveco-command.cmd"
   Delete "$INSTDIR\collect-diagnostics.ps1"
   Delete "$INSTDIR\collect-diagnostics.cmd"
   Delete "$INSTDIR\arkts-tasks.json"
@@ -99,6 +124,8 @@ Section "Uninstall"
   Delete "$INSTDIR\tasks.created-by-arkts-deveco"
   Delete "$INSTDIR\tasks.arkts-deveco.sha256"
   Delete "$INSTDIR\environment-status.ini"
+  Delete "$INSTDIR\extension-registration-state.json"
+  RMDir /r "$INSTDIR\extension-before-arkts-deveco"
   Delete "$INSTDIR\Uninstall.exe"
   Delete "$SMPROGRAMS\ArkTS DevEco\Export Diagnostics.lnk"
   RMDir "$SMPROGRAMS\ArkTS DevEco"
