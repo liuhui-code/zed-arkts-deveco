@@ -158,6 +158,21 @@ if ($Mode -eq "Repair" -and -not $status.Ready) {
 }
 
 Write-StatusFile $status
+$stateDirectory = Join-Path $env:LOCALAPPDATA "ArkTSDevEco"
+New-Item $stateDirectory -ItemType Directory -Force | Out-Null
+$statusRecord = [ordered]@{
+  checkedAt = (Get-Date).ToUniversalTime().ToString("o")
+  mode = $Mode
+  ready = $status.Ready
+  summary = $status.Summary
+  components = $status.Components
+}
+$utf8NoBom = New-Object Text.UTF8Encoding -ArgumentList $false
+[IO.File]::WriteAllText(
+  (Join-Path $stateDirectory "environment-check.json"),
+  (($statusRecord | ConvertTo-Json -Depth 6) + "`n"),
+  $utf8NoBom
+)
 if ($Json) {
   $status | ConvertTo-Json -Depth 5 -Compress
 }

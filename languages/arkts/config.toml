@@ -1,4 +1,4 @@
-name = "ArkTS DevEco"
+name = "ArkTS"
 grammar = "arkts"
 path_suffixes = ["ets"]
 line_comments = ["// "]

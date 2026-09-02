@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$StateDir,
   [string]$SourceTasks,
+  [string]$CommandWrapper,
   [string]$TasksFile = (Join-Path $env:APPDATA "Zed\tasks.json")
 )
 
@@ -178,6 +179,29 @@ function Install-GlobalTasks {
     throw "Bundled ArkTS task definitions are empty"
   }
 
+  if ($CommandWrapper) {
+    if (-not (Test-Path $CommandWrapper -PathType Leaf)) {
+      throw "ArkTS DevEco command wrapper was not found: $CommandWrapper"
+    }
+    foreach ($task in $source) {
+      if ($task.command -eq "devecocli") {
+        $task.command = $CommandWrapper
+      }
+    }
+  }
+
+  # Refresh tasks previously managed by this installer. This is required when an
+  # update changes command wiring while keeping stable user-facing task labels.
+  if (Test-Path $installedHashFile -PathType Leaf) {
+    $recordedHash = (Get-Content $installedHashFile -Raw).Trim()
+    if ((Test-Path $TasksFile -PathType Leaf) -and
+        $recordedHash -and
+        (Get-FileSha256 $TasksFile) -ne $recordedHash) {
+      throw "Zed tasks.json changed after ArkTS tasks were registered; leaving user changes untouched"
+    }
+    Uninstall-GlobalTasks
+  }
+
   $existingText = if (Test-Path $TasksFile -PathType Leaf) {
     [IO.File]::ReadAllText($TasksFile, [Text.Encoding]::UTF8)
   } else {
@@ -186,13 +210,6 @@ function Install-GlobalTasks {
   $missing = @($source | Where-Object { -not (Test-TaskLabelPresent $existingText $_.label) })
   if ($missing.Count -eq 0) {
     return
-  }
-
-  if ((Test-Path $installedHashFile -PathType Leaf) -and (Test-Path $TasksFile -PathType Leaf)) {
-    $recordedHash = (Get-Content $installedHashFile -Raw).Trim()
-    if ($recordedHash -and (Get-FileSha256 $TasksFile) -ne $recordedHash) {
-      throw "Zed tasks.json changed after ArkTS tasks were registered; leaving user changes untouched"
-    }
   }
 
   if (-not (Test-Path $backupFile) -and -not (Test-Path $createdMarker)) {
